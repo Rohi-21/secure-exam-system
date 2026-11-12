@@ -11,12 +11,13 @@ import argon2 from "argon2";
 // ─── Argon2id ───────────────────────────────────────────────────────────────
 
 /** Argon2id parameters — RFC 9106 recommended minimum */
-const ARGON2_OPTIONS: argon2.Options = {
-  type: argon2.argon2id,
-  memoryCost: 65536,  // 64 MB
-  timeCost: 3,        // 3 iterations
-  parallelism: 4,     // 4 threads
-  hashLength: 32,     // 256-bit output
+// argon2.argon2id is a number at runtime; cast to the literal union TS expects
+const ARGON2_TYPE: 0 | 1 | 2 = argon2.argon2id as 0 | 1 | 2;
+const ARGON2_BASE = {
+  memoryCost: 65536,
+  timeCost: 3,
+  parallelism: 4,
+  hashLength: 32,
 };
 
 /**
@@ -24,7 +25,7 @@ const ARGON2_OPTIONS: argon2.Options = {
  * Returns a string containing salt + hash (argon2 encoded format).
  */
 export async function argon2idHash(password: string): Promise<string> {
-  return argon2.hash(password, ARGON2_OPTIONS);
+  return argon2.hash(password, { ...ARGON2_BASE, type: ARGON2_TYPE });
 }
 
 /**
@@ -53,11 +54,12 @@ export async function argon2idDeriveKey(
   salt: Buffer
 ): Promise<Buffer> {
   const hash = await argon2.hash(passphrase, {
-    ...ARGON2_OPTIONS,
+    ...ARGON2_BASE,
+    type: ARGON2_TYPE,
     salt,
-    raw: true, // return raw bytes instead of encoded string
+    raw: true as true,
   });
-  return Buffer.from(hash as Buffer);
+  return Buffer.from(hash as unknown as Uint8Array);
 }
 
 /** Generate a 32-byte random Argon2id salt */

@@ -40,6 +40,7 @@ model User {
   enrollments       ExamEnrollment[]
   auditLogs         AuditLog[]
   createdExams      Exam[]            @relation("ExamCreator")
+  refreshTokens     RefreshToken[]
 }
 
 // ─────────────────────────────────────────────
@@ -345,4 +346,31 @@ model AuditLog {
 
   actor         User?    @relation(fields: [actorId], references: [id])
   exam          Exam?    @relation(fields: [examId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// REFRESH TOKENS (rotation — stored as hashed)
+// ─────────────────────────────────────────────
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique  // SHA-256(raw_token) — never store raw
+  userId      String
+  expiresAt   DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// LOGIN ATTEMPTS (for account lockout)
+// ─────────────────────────────────────────────
+
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  usn         String
+  ipAddress   String
+  success     Boolean
+  attemptedAt DateTime @default(now())
 }
