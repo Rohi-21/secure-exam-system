@@ -8,10 +8,10 @@
 
 import {
   generateKeyPairSync,
-  createSign,
-  createVerify,
   createPublicKey,
   createPrivateKey,
+  sign as cryptoSign,
+  verify as cryptoVerify,
 } from "crypto";
 import { randomBytes } from "crypto";
 
@@ -27,12 +27,10 @@ export function generateEd25519KeyPair(): {
   return { publicKeyPem: publicKey, privateKeyPem: privateKey };
 }
 
-/** Sign data with Ed25519 private key */
+/** Sign data with Ed25519 private key (one-shot, prehash-free) */
 export function ed25519Sign(privateKeyPem: string, data: Buffer): string {
-  const signer = createSign("sha512"); // Ed25519 ignores hash — Node.js requires this
-  signer.update(data);
   const privateKey = createPrivateKey(privateKeyPem);
-  return signer.sign(privateKey, "base64");
+  return cryptoSign(null, data, privateKey).toString("base64");
 }
 
 /** Verify an Ed25519 signature */
@@ -42,10 +40,8 @@ export function ed25519Verify(
   signatureB64: string
 ): boolean {
   try {
-    const verifier = createVerify("sha512");
-    verifier.update(data);
     const publicKey = createPublicKey(publicKeyPem);
-    return verifier.verify(publicKey, Buffer.from(signatureB64, "base64"));
+    return cryptoVerify(null, data, publicKey, Buffer.from(signatureB64, "base64"));
   } catch {
     return false;
   }

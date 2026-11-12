@@ -6,11 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx --test tests/crypto/merkle.test.ts tests/crypto/commitment.test.ts tests/crypto/shamir.test.ts tests/security/audit-chain.test.ts tests/security/ecdh-pfs.test.ts tests/security/watermark.test.ts",
+    "test:crypto": "npx tsx --test tests/crypto/merkle.test.ts tests/crypto/commitment.test.ts tests/crypto/shamir.test.ts",
+    "test:security": "npx tsx --test tests/security/audit-chain.test.ts tests/security/ecdh-pfs.test.ts tests/security/watermark.test.ts",
+    "bench:cipher": "npx tsx tests/crypto/cipher-benchmark.ts",
+    "bench:kdf": "npx tsx tests/crypto/kdf-benchmark.ts",
+    "bench:all": "npm run bench:cipher && npm run bench:kdf",
+    "seed": "npx tsx prisma/seed.ts",
+    "generate-keys": "npx tsx scripts/generate-server-keys.ts",
+    "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "argon2": "^0.45.2",
+    "bcrypt": "^6.0.0",
     "jose": "^6.2.17",
     "next": "16.4.6",
     "nodemailer": "^10.5.0",
@@ -24,14 +34,17 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^18.0.10",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

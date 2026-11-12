@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-11-12T16:30:36.054Z",
+  "results": [
+    {
+      "algorithm": "Argon2id",
+      "parameters": {
+        "memoryCost_KB": 65536,
+        "timeCost": 3,
+        "parallelism": 4
+      },
+      "avgHashMs": 280.64,
+      "opsPerSec": 3.56,
+      "memoryMB": 64,
+      "rfcCompliant": true,
+      "recommendation": "✅ OUR CHOICE — RFC 9106 compliant. Best resistance to GPU/ASIC attacks.",
+      "hashSample": "$argon2id$v=19$m=65536,t=3,p=4$SfRQawAJR…"
+    },
+    {
+      "algorithm": "PBKDF2-SHA256 (100K iter)",
+      "parameters": {
+        "iterations": 100000,
+        "keyLength": 32,
+        "digest": "SHA-256"
+      },
+      "avgHashMs": 27.97,
+      "opsPerSec": 35.76,
+      "memoryMB": "~0 (CPU-only)",
+      "rfcCompliant": true,
+      "recommendation": "❌ Below NIST minimum (600K iterations for SHA-256). Insufficient.",
+      "hashSample": "2b0285fa00502c7e303032159d17a337ea96b560…"
+    },
+    {
+      "algorithm": "PBKDF2-SHA256 (600K iter)",
+      "parameters": {
+        "iterations": 600000,
+        "keyLength": 32,
+        "digest": "SHA-256"
+      },
+      "avgHashMs": 173.19,
+      "opsPerSec": 5.77,
+      "memoryMB": "~0 (CPU-only)",
+      "rfcCompliant": true,
+      "recommendation": "⚠️  NIST min 600K iterations for SHA-256. CPU-only — vulnerable to GPU attacks.",
+      "hashSample": "85327dc867b0efdbb21bdd8ad87131ef933e5d11…"
+    },
+    {
+      "algorithm": "bcrypt (cost 10)",
+      "parameters": {
+        "costFactor": 10,
+        "outputLength": 60
+      },
+      "avgHashMs": 60.05,
+      "opsPerSec": 16.65,
+      "memoryMB": "4KB (fixed — not memory-hard by modern standards)",
+      "rfcCompliant": false,
+      "recommendation": "❌ Cost factor too low. Minimum recommended: 12.",
+      "hashSample": "$2b$10$wU636ZdJUnlb1sVnhPbFW.R8o0Aa3XQEV…"
+    },
+    {
+      "algorithm": "bcrypt (cost 12)",
+      "parameters": {
+        "costFactor": 12,
+        "outputLength": 60
+      },
+      "avgHashMs": 223.63,
+      "opsPerSec": 4.47,
+      "memoryMB": "4KB (fixed — not memory-hard by modern standards)",
+      "rfcCompliant": false,
+      "recommendation": "⚠️  Acceptable legacy choice. Fixed 4KB memory — vulnerable to ASIC. Prefer Argon2id.",
+      "hashSample": "$2b$12$tcvaKg0wRvqH7HvvcPY.JOO8E/Zw2/wvi…"
+    }
+  ]
+}

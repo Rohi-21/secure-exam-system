@@ -1,0 +1,149 @@
+{
+  "timestamp": "2026-11-12T16:30:15.999Z",
+  "results": [
+    {
+      "algorithm": "AES-256-GCM",
+      "payloadSizeBytes": 1024,
+      "payloadSizeLabel": "1KB",
+      "encryptionsPerSec": 100474,
+      "decryptionsPerSec": 158972,
+      "encryptLatencyUs": 10,
+      "decryptLatencyUs": 6,
+      "throughputMBps": 98.12,
+      "authenticationIncluded": true,
+      "notes": "AEAD — recommended (our choice)"
+    },
+    {
+      "algorithm": "AES-256-CBC+HMAC",
+      "payloadSizeBytes": 1024,
+      "payloadSizeLabel": "1KB",
+      "encryptionsPerSec": 78839,
+      "decryptionsPerSec": 91590,
+      "encryptLatencyUs": 13,
+      "decryptLatencyUs": 11,
+      "throughputMBps": 76.99,
+      "authenticationIncluded": true,
+      "notes": "Encrypt-then-MAC (legacy)"
+    },
+    {
+      "algorithm": "AES-256-CTR (no auth)",
+      "payloadSizeBytes": 1024,
+      "payloadSizeLabel": "1KB",
+      "encryptionsPerSec": 234390,
+      "decryptionsPerSec": 193469,
+      "encryptLatencyUs": 4,
+      "decryptLatencyUs": 5,
+      "throughputMBps": 228.9,
+      "authenticationIncluded": false,
+      "notes": "Stream, no authentication"
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "payloadSizeBytes": 16384,
+      "payloadSizeLabel": "16KB",
+      "encryptionsPerSec": 42698,
+      "decryptionsPerSec": 43238,
+      "encryptLatencyUs": 23,
+      "decryptLatencyUs": 23,
+      "throughputMBps": 667.16,
+      "authenticationIncluded": true,
+      "notes": "AEAD — recommended (our choice)"
+    },
+    {
+      "algorithm": "AES-256-CBC+HMAC",
+      "payloadSizeBytes": 16384,
+      "payloadSizeLabel": "16KB",
+      "encryptionsPerSec": 23993,
+      "decryptionsPerSec": 26953,
+      "encryptLatencyUs": 42,
+      "decryptLatencyUs": 37,
+      "throughputMBps": 374.89,
+      "authenticationIncluded": true,
+      "notes": "Encrypt-then-MAC (legacy)"
+    },
+    {
+      "algorithm": "AES-256-CTR (no auth)",
+      "payloadSizeBytes": 16384,
+      "payloadSizeLabel": "16KB",
+      "encryptionsPerSec": 42472,
+      "decryptionsPerSec": 52382,
+      "encryptLatencyUs": 24,
+      "decryptLatencyUs": 19,
+      "throughputMBps": 663.62,
+      "authenticationIncluded": false,
+      "notes": "Stream, no authentication"
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "payloadSizeBytes": 65536,
+      "payloadSizeLabel": "64KB",
+      "encryptionsPerSec": 12486,
+      "decryptionsPerSec": 14201,
+      "encryptLatencyUs": 80,
+      "decryptLatencyUs": 70,
+      "throughputMBps": 780.38,
+      "authenticationIncluded": true,
+      "notes": "AEAD — recommended (our choice)"
+    },
+    {
+      "algorithm": "AES-256-CBC+HMAC",
+      "payloadSizeBytes": 65536,
+      "payloadSizeLabel": "64KB",
+      "encryptionsPerSec": 6612,
+      "decryptionsPerSec": 9320,
+      "encryptLatencyUs": 151,
+      "decryptLatencyUs": 107,
+      "throughputMBps": 413.28,
+      "authenticationIncluded": true,
+      "notes": "Encrypt-then-MAC (legacy)"
+    },
+    {
+      "algorithm": "AES-256-CTR (no auth)",
+      "payloadSizeBytes": 65536,
+      "payloadSizeLabel": "64KB",
+      "encryptionsPerSec": 14227,
+      "decryptionsPerSec": 13814,
+      "encryptLatencyUs": 70,
+      "decryptLatencyUs": 72,
+      "throughputMBps": 889.22,
+      "authenticationIncluded": false,
+      "notes": "Stream, no authentication"
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "payloadSizeBytes": 1048576,
+      "payloadSizeLabel": "1MB",
+      "encryptionsPerSec": 951,
+      "decryptionsPerSec": 1032,
+      "encryptLatencyUs": 1052,
+      "decryptLatencyUs": 969,
+      "throughputMBps": 950.62,
+      "authenticationIncluded": true,
+      "notes": "AEAD — recommended (our choice)"
+    },
+    {
+      "algorithm": "AES-256-CBC+HMAC",
+      "payloadSizeBytes": 1048576,
+      "payloadSizeLabel": "1MB",
+      "encryptionsPerSec": 460,
+      "decryptionsPerSec": 652,
+      "encryptLatencyUs": 2174,
+      "decryptLatencyUs": 1533,
+      "throughputMBps": 459.94,
+      "authenticationIncluded": true,
+      "notes": "Encrypt-then-MAC (legacy)"
+    },
+    {
+      "algorithm": "AES-256-CTR (no auth)",
+      "payloadSizeBytes": 1048576,
+      "payloadSizeLabel": "1MB",
+      "encryptionsPerSec": 1024,
+      "decryptionsPerSec": 1045,
+      "encryptLatencyUs": 977,
+      "decryptLatencyUs": 957,
+      "throughputMBps": 1023.94,
+      "authenticationIncluded": false,
+      "notes": "Stream, no authentication"
+    }
+  ]
+}
