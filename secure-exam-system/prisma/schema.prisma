@@ -210,7 +210,7 @@ model ExamSession {
   submittedAt     DateTime?
   status          String    @default("active") // active | submitted | expired
   // Server-side nonce used for this session's ECDH handshake (anti-replay)
-  handshakeNonce  String    @unique
+  handshakeNonce  String    // Not unique — rotated each reconnect
 
   student         User      @relation(fields: [studentId], references: [id])
   exam            Exam      @relation(fields: [examId], references: [id])
