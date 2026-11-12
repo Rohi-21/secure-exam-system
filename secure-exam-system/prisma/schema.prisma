@@ -1,0 +1,348 @@
+// CNS Secure Exam System — Prisma Schema
+// All sensitive data encrypted before storage (AES-256-GCM)
+// Never store plaintext passwords, keys, answers, or results
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // switch to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id              String   @id @default(uuid())
+  usn             String   @unique // e.g. 01FE23BCS240
+  email           String   @unique
+  name            String
+  role            String   // "student" | "examiner" | "admin" | "hod"
+  passwordHash    String   // Argon2id output
+  totpSecret      String   // encrypted TOTP secret (AES-GCM with server key)
+  ed25519PubKey   String?  // for session binding challenge-response
+  ecdsaPubKey     String?  // for submission signing (ECDSA-P256, students only)
+  isLocked        Boolean  @default(false)
+  failedAttempts  Int      @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  examinerKey       ExaminerKey?
+  examSessions      ExamSession[]
+  submissions       Submission[]
+  results           Result[]
+  keyShares         KeyShare[]        @relation("TrusteeShares")
+  enrollments       ExamEnrollment[]
+  auditLogs         AuditLog[]
+  createdExams      Exam[]            @relation("ExamCreator")
+}
+
+// ─────────────────────────────────────────────
+// EXAMINER RSA KEYS
+// ─────────────────────────────────────────────
+
+model ExaminerKey {
+  id            String    @id @default(uuid())
+  examinerId    String    @unique
+  rsaPublicKey  String    // RSA-2048 public key (PEM / base64 DER)
+  keyVersion    Int       @default(1)
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+
+  examiner      User      @relation(fields: [examinerId], references: [id])
+  examKEKMeta   ExamKEKMetadata[]
+}
+
+// ─────────────────────────────────────────────
+// EXAMS
+// ─────────────────────────────────────────────
+
+model Exam {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  createdById   String
+  startTime     DateTime
+  endTime       DateTime
+  durationMins  Int
+  status        String   @default("draft") // draft | scheduled | active | closed | revealed
+  createdAt     DateTime @default(now())
+
+  createdBy     User     @relation("ExamCreator", fields: [createdById], references: [id])
+
+  enrollments   ExamEnrollment[]
+  examSessions  ExamSession[]
+  questions     Question[]
+  answerKey     AnswerKey?
+  kekMetadata   ExamKEKMetadata?
+  keyShares     KeyShare[]
+  submissions   Submission[]
+  results       Result[]
+  auditLogs     AuditLog[]
+}
+
+// ─────────────────────────────────────────────
+// EXAM ENROLLMENTS
+// ─────────────────────────────────────────────
+
+model ExamEnrollment {
+  id          String   @id @default(uuid())
+  examId      String
+  studentId   String
+  enrolledAt  DateTime @default(now())
+
+  exam        Exam     @relation(fields: [examId], references: [id])
+  student     User     @relation(fields: [studentId], references: [id])
+
+  @@unique([examId, studentId])
+}
+
+// ─────────────────────────────────────────────
+// PER-EXAM KEK METADATA
+// ─────────────────────────────────────────────
+
+model ExamKEKMetadata {
+  id              String  @id @default(uuid())
+  examId          String  @unique
+  examinerKeyId   String
+  // ExamKEK wrapped with examiner's RSA-2048 public key (OAEP)
+  wrappedKEKRSA   String  // base64
+  algorithm       String  @default("RSA-OAEP-SHA256")
+  keyVersion      Int     @default(1)
+  createdAt       DateTime @default(now())
+
+  exam            Exam          @relation(fields: [examId], references: [id])
+  examinerKey     ExaminerKey   @relation(fields: [examinerKeyId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// SHAMIR SECRET SHARING — KEY SHARES
+// ─────────────────────────────────────────────
+
+model KeyShare {
+  id              String  @id @default(uuid())
+  examId          String
+  trusteeId       String
+  // Raw Shamir share encrypted with Argon2id(trustee_password, argon2Salt)
+  encryptedShare  String  // base64 ciphertext
+  shareIv         String  // base64 IV
+  shareAuthTag    String  // base64 auth tag
+  argon2Salt      String  // base64 — stored so trustee can re-derive their key
+  shareIndex      Int
+  threshold       Int     @default(2)
+  totalShares     Int     @default(3)
+  createdAt       DateTime @default(now())
+
+  exam            Exam    @relation(fields: [examId], references: [id])
+  trustee         User    @relation("TrusteeShares", fields: [trusteeId], references: [id])
+
+  @@unique([examId, trusteeId])
+}
+
+// ─────────────────────────────────────────────
+// QUESTIONS (encrypted per-question)
+// ─────────────────────────────────────────────
+
+model Question {
+  id            String  @id @default(uuid())
+  examId        String
+  questionNo    Int
+  // AES-256-GCM encrypted { text, optionA, optionB, optionC, optionD }
+  ciphertext    String  // base64
+  authTag       String  // base64
+  iv            String  // base64
+  aad           String  // JSON string of AAD object
+  // DEK wrapped with ExamKEK
+  wrappedDEK    String  // base64
+  dekIv         String  // base64
+  dekAuthTag    String  // base64
+  keyVersion    Int     @default(1)
+  algorithm     String  @default("AES-256-GCM")
+  createdAt     DateTime @default(now())
+
+  exam          Exam    @relation(fields: [examId], references: [id])
+
+  @@unique([examId, questionNo])
+}
+
+// ─────────────────────────────────────────────
+// ANSWER KEYS (encrypted, separate from questions)
+// ─────────────────────────────────────────────
+
+model AnswerKey {
+  id              String    @id @default(uuid())
+  examId          String    @unique
+  // AES-256-GCM encrypted canonical JSON: { exam_id, version, answers: { "1": "B", ... } }
+  ciphertext      String    // base64
+  authTag         String    // base64
+  iv              String    // base64
+  aad             String    // JSON string of AAD
+  wrappedDEK      String    // base64 — DEK wrapped with ExamKEK
+  dekIv           String    // base64
+  dekAuthTag      String    // base64
+  keyVersion      Int       @default(1)
+  // Commitment scheme (commit-reveal)
+  commitment      String    // hex SHA-256(canonical_key_bytes + salt_bytes)
+  commitmentSalt  String?   // hex — NULL until post-exam reveal
+  revealedAt      DateTime?
+  algorithm       String    @default("AES-256-GCM")
+  createdAt       DateTime  @default(now())
+
+  exam            Exam      @relation(fields: [examId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// EXAM SESSIONS
+// ─────────────────────────────────────────────
+
+model ExamSession {
+  id              String    @id @default(uuid())
+  studentId       String
+  examId          String
+  // NOTE: session keys (ECDH-derived) are NEVER stored — ephemeral only
+  startedAt       DateTime  @default(now())
+  submittedAt     DateTime?
+  status          String    @default("active") // active | submitted | expired
+  // Server-side nonce used for this session's ECDH handshake (anti-replay)
+  handshakeNonce  String    @unique
+
+  student         User      @relation(fields: [studentId], references: [id])
+  exam            Exam      @relation(fields: [examId], references: [id])
+  submission      Submission?
+
+  @@unique([studentId, examId])
+}
+
+// ─────────────────────────────────────────────
+// SUBMISSIONS (encrypted student answers)
+// ─────────────────────────────────────────────
+
+model Submission {
+  id              String   @id @default(uuid())
+  sessionId       String   @unique
+  studentId       String
+  examId          String
+  // AES-256-GCM encrypted payload
+  ciphertext      String   // base64
+  authTag         String   // base64
+  iv              String   // base64
+  aad             String   // JSON AAD: { record_id, record_type:"submission", exam_id, user_id, key_version }
+  algorithm       String   @default("AES-256-GCM")
+  keyVersion      Int      @default(1)
+  // Plaintext content hash + ECDSA signature (computed before encryption)
+  contentHash     String   // hex SHA-256 of plaintext payload
+  ecdsaSignature  String   // base64 ECDSA-P256 signature over contentHash
+  // Anti-replay
+  submissionNonce String   @unique
+  // Merkle inclusion proof (populated after exam closes)
+  merkleProof     String?  // JSON
+  submittedAt     DateTime @default(now())
+
+  session         ExamSession @relation(fields: [sessionId], references: [id])
+  student         User        @relation(fields: [studentId], references: [id])
+  exam            Exam        @relation(fields: [examId], references: [id])
+  dek             SubmissionDEK?
+  result          Result?
+}
+
+// ─────────────────────────────────────────────
+// SUBMISSION DEK REFERENCES
+// ─────────────────────────────────────────────
+
+model SubmissionDEK {
+  id              String     @id @default(uuid())
+  submissionId    String     @unique
+  // DEK wrapped with ExamKEK (AES-256-GCM)
+  wrappedDEK      String     // base64
+  dekIv           String     // base64
+  dekAuthTag      String     // base64
+  keyVersion      Int        @default(1)
+
+  submission      Submission @relation(fields: [submissionId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// RESULTS (encrypted evaluation output)
+// ─────────────────────────────────────────────
+
+model Result {
+  id                String    @id @default(uuid())
+  submissionId      String    @unique
+  studentId         String
+  examId            String
+  // AES-256-GCM encrypted { score, totalQuestions, correct, incorrect, details }
+  ciphertext        String    // base64
+  authTag           String    // base64
+  iv                String    // base64
+  aad               String    // JSON AAD
+  algorithm         String    @default("AES-256-GCM")
+  keyVersion        Int       @default(1)
+  // Examiner digital signature over result ciphertext hash
+  examinerSignature String    // base64 ECDSA signature
+  // Merkle root of entire result batch
+  merkleRoot        String?   // hex
+  releasedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  submission        Submission @relation(fields: [submissionId], references: [id])
+  student           User       @relation(fields: [studentId], references: [id])
+  exam              Exam       @relation(fields: [examId], references: [id])
+  dek               ResultDEK?
+}
+
+// ─────────────────────────────────────────────
+// RESULT DEK REFERENCES
+// ─────────────────────────────────────────────
+
+model ResultDEK {
+  id          String  @id @default(uuid())
+  resultId    String  @unique
+  wrappedDEK  String  // base64 — DEK wrapped with ExamKEK
+  dekIv       String  // base64
+  dekAuthTag  String  // base64
+  keyVersion  Int     @default(1)
+
+  result      Result  @relation(fields: [resultId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// USED NONCES (anti-replay)
+// ─────────────────────────────────────────────
+
+model UsedNonce {
+  nonce       String   @id
+  examId      String
+  studentId   String
+  usedAt      DateTime @default(now())
+  expiresAt   DateTime
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG (SHA-256 hash chain, append-only)
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  sequenceNo    Int      @unique // monotonically increasing
+  eventType     String   // e.g. "EXAM_PAPER_DECRYPTED", "SUBMISSION_RECEIVED"
+  actorId       String?
+  examId        String?
+  resourceType  String?
+  resourceId    String?
+  ipAddress     String?
+  eventData     String   // JSON — event-specific metadata
+  timestamp     DateTime @default(now())
+  // Hash chain fields
+  prevHash      String   // SHA-256 of previous entry (hex) — "0".repeat(64) for genesis
+  entryHash     String   // SHA-256(this entry data + prevHash) (hex)
+  // Ed25519 signature by audit service key over entryHash
+  auditSig      String   // base64
+
+  actor         User?    @relation(fields: [actorId], references: [id])
+  exam          Exam?    @relation(fields: [examId], references: [id])
+}

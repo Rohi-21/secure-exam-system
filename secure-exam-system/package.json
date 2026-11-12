@@ -1,0 +1,35 @@
+{
+  "name": "secure-exam-system",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "argon2": "^0.45.2",
+    "jose": "^6.2.17",
+    "next": "16.4.6",
+    "nodemailer": "^10.5.0",
+    "otpauth": "^9.6.0",
+    "prisma": "^5.22.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "shamirs-secret-sharing": "^2.0.1",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5"
+  }
+}
