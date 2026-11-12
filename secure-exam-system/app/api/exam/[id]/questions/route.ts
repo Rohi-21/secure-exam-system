@@ -19,12 +19,12 @@ import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const studentId = req.headers.get("x-user-id");
     const sessionId = req.headers.get("x-session-id") ?? req.nextUrl.searchParams.get("sessionId") ?? "";
-    const examId = params.id;
+    const { id: examId } = await params;
 
     // ── Validate session ──────────────────────────────────────────────
     const session = sessionKeyStore.get(sessionId);

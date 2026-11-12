@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // cacheComponents + partialPrefetching removed — cacheComponents is incompatible
+  // with dynamic [id] pages that use useParams() in Client Components.
   turbopack: {
     rules: {
       "*.css": {

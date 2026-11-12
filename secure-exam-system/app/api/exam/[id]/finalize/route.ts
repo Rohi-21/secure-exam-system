@@ -18,11 +18,11 @@ import { buildMerkleTree, generateMerkleProof } from "@/lib/crypto/merkle";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const role = req.headers.get("x-user-role");
-    const examId = params.id;
+    const { id: examId } = await params;
 
     if (!["examiner", "admin", "hod"].includes(role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

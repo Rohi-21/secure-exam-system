@@ -18,12 +18,12 @@ import { verifyCommitment } from "@/lib/crypto/commitment";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const examinerId = req.headers.get("x-user-id")!;
     const role = req.headers.get("x-user-role");
-    const examId = params.id;
+    const { id: examId } = await params;
 
     if (!["examiner", "admin", "hod"].includes(role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -87,10 +87,10 @@ export async function POST(
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const examId = params.id;
+    const { id: examId } = await params;
     const answerKey = await prisma.answerKey.findUnique({
       where: { examId },
       select: { commitment: true, commitmentSalt: true, revealedAt: true },

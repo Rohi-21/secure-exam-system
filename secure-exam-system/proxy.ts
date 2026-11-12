@@ -67,7 +67,7 @@ function checkRateLimit(key: string, max: number): boolean {
   return true;
 }
 
-export async function middleware(req: NextRequest) {
+export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const ip = getClientIP(req);
 
@@ -133,6 +133,8 @@ export async function middleware(req: NextRequest) {
 
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
+
+export { proxy };
 
 export const config = {
   matcher: [

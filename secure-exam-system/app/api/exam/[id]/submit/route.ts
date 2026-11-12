@@ -29,12 +29,12 @@ import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const studentId = req.headers.get("x-user-id")!;
     const role = req.headers.get("x-user-role");
-    const examId = params.id;
+    const { id: examId } = await params;
 
     if (role !== "student") {
       return NextResponse.json({ error: "Only students can submit" }, { status: 403 });

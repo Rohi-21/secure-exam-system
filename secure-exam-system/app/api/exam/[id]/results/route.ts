@@ -28,12 +28,12 @@ import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const studentId = req.headers.get("x-user-id")!;
     const sessionId = req.headers.get("x-session-id") ?? req.nextUrl.searchParams.get("sessionId") ?? "";
-    const examId = params.id;
+    const { id: examId } = await params;
 
     // ── Validate ECDH session ─────────────────────────────────────────
     const session = sessionKeyStore.get(sessionId);
@@ -144,11 +144,11 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const role = req.headers.get("x-user-role");
-    const examId = params.id;
+    const { id: examId } = await params;
 
     if (!["examiner", "admin", "hod"].includes(role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
