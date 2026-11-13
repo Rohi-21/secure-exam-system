@@ -70,8 +70,9 @@ L4  DraftKey = WebCrypto.generateKey(AES-GCM, non-exportable)
 | `milestone-2-auth` | Argon2id + TOTP + Ed25519 2FA, JWT + refresh rotation, middleware RBAC |
 | `milestone-3-exam-lifecycle` | Exam create, paper upload, ECDH handshake, question delivery, submission |
 | `milestone-4-integrity` | Shamir reconstruction, auto-grader, Merkle finalization, commit-reveal, audit chain |
-| `milestone-5-research` | Benchmarks (cipher+KDF), 38 tests, seed script, benchmark dashboard |
+| `milestone-5-research` | Benchmarks (cipher+KDF), 56 tests, seed script, benchmark dashboard |
 | `milestone-6-final` | Complete UI flows, architecture docs, final build |
+| **`stage-7-complete`** | **Security audit corrections: ECDH contract, header separation, canonical signing, IndexedDB key persistence, trustee authorization, Merkle result proofs, audit chain export fix, TypeScript clean, 62/62 tests** |
 
 ---
 
@@ -103,7 +104,7 @@ Copy `.env.local.template` to `.env.local` and fill in the generated keys.
 ## Running Tests
 
 ```powershell
-# All 38 tests
+# All 62 tests (8 suites)
 npm test
 
 # Crypto tests only (Merkle, Shamir, Commitment)
@@ -111,6 +112,12 @@ npm run test:crypto
 
 # Security tests (Audit chain, ECDH PFS, Watermark)
 npm run test:security
+
+# Stage 7 integration tests (ECDH contract, canonicalization, ECDSA, Shamir, audit chain)
+npm run test:integration
+
+# End-to-end cryptographic lifecycle
+npm run test:e2e
 ```
 
 ## Running Benchmarks
@@ -123,7 +130,7 @@ npm run bench:cipher
 npm run bench:kdf
 ```
 
-Results saved to `tests/results/` and viewable at `/admin/benchmarks`.
+Results saved to `tests/results/` and viewable at `/benchmarks`.
 
 ---
 
@@ -154,17 +161,31 @@ Results saved to `tests/results/` and viewable at `/admin/benchmarks`.
 | POST | `/api/auth/register` | Register with Argon2id + TOTP |
 | POST | `/api/auth/login` | Phase 1: password + TOTP |
 | POST | `/api/auth/login/challenge` | Phase 2: Ed25519 device binding |
+| POST | `/api/admin/users` | Admin-only user provisioning |
+| GET  | `/api/exam` | List exams (student/examiner) |
 | POST | `/api/exam/create` | Create exam + Shamir KEK split |
 | POST | `/api/exam/[id]/upload-paper` | Encrypt + watermark questions |
 | POST | `/api/exam/[id]/ecdh-handshake` | Establish ECDH session key |
 | GET  | `/api/exam/[id]/questions` | Decrypt + re-encrypt for session |
 | POST | `/api/exam/[id]/submit` | ECDSA-verified encrypted submission |
-| POST | `/api/keys/reconstruct` | Shamir 2-of-3 ceremony |
+| POST | `/api/keys/trustee-approve` | Independent trustee share submission |
+| POST | `/api/keys/reconstruct` | Shamir 2-of-3 ceremony (quorum) |
 | POST | `/api/exam/[id]/finalize` | Merkle tree finalization |
 | POST | `/api/exam/[id]/evaluate` | MCQ grading + Ed25519 sign results |
-| GET  | `/api/exam/[id]/results` | ECDH-re-encrypted result delivery |
+| GET  | `/api/exam/[id]/results` | ECDH-re-encrypted result + Merkle proof |
 | POST | `/api/audit` | Append signed audit chain entry |
 | GET  | `/api/audit?verify=true` | Verify entire hash chain |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture and component diagram |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | STRIDE analysis, trust boundaries, residual risks |
+| [`docs/key-hierarchy.md`](docs/key-hierarchy.md) | 4-level key hierarchy explanation |
+| [`docs/workflows.md`](docs/workflows.md) | Detailed examination workflow sequence diagrams |
 
 ---
 
@@ -176,6 +197,10 @@ Results saved to `tests/results/` and viewable at `/admin/benchmarks`.
 
 **Why Ed25519 for audit + ECDSA for submissions?** Ed25519 (server-controlled, server-side) for chain signing. ECDSA-P256 (browser WebCrypto, non-exportable) for student submission binding — maximises WebCrypto compatibility.
 
+**Trust model:** The server is semi-trusted. It participates in ECDH and grading.
+A fully compromised server can read answers at grading time. See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
+for a full STRIDE analysis and honest documentation of limitations.
+
 ---
 
-*KLE Technological University — CNS Project 2024*
+*KLE Technological University — CNS Project 2026 — Stage 7 Complete*
