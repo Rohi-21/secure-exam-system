@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/* ── Design Tokens ──────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Emil Kowalski easing curves — never use ease-in for UI */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Color surfaces */
+  --background: #020617;   /* slate-950 */
+  --foreground: #f1f5f9;   /* slate-100 */
+  --surface: #0f172a;      /* slate-900 */
+  --border: #1e293b;       /* slate-800 */
 }
 
 @theme inline {
@@ -12,15 +22,127 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ── Base ───────────────────────────────────────────────────────────────── */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Browser surfaces — themed (craft-floor requirement) ─────────────────── */
+
+::selection {
+  background: #2563eb40;
+  color: #93c5fd;
+}
+
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ── Button press feedback (Emil Kowalski — 160ms, scale 0.97) ─────────── */
+
+button:not(:disabled),
+[role="button"]:not(:disabled) {
+  transition: transform 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: scale(0.97);
+  }
+}
+
+/* Exam option buttons — no scale press (exam accuracy requires stable targets) */
+.exam-option {
+  transition: background-color 150ms var(--ease-out),
+              border-color 150ms var(--ease-out),
+              color 150ms var(--ease-out);
+}
+
+/* ── Modal entrance (from scale 0.95, not 0) ────────────────────────────── */
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-enter {
+  animation: modal-in 200ms var(--ease-out) forwards;
+}
+
+.overlay-enter {
+  animation: overlay-in 200ms ease forwards;
+}
+
+/* ── Stagger animation for list items (30-80ms between items) ───────────── */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-item {
+  animation: fade-up 250ms var(--ease-out) forwards;
+  opacity: 0;
+}
+.stagger-item:nth-child(1) { animation-delay: 0ms; }
+.stagger-item:nth-child(2) { animation-delay: 40ms; }
+.stagger-item:nth-child(3) { animation-delay: 75ms; }
+.stagger-item:nth-child(4) { animation-delay: 105ms; }
+.stagger-item:nth-child(5) { animation-delay: 130ms; }
+.stagger-item:nth-child(6) { animation-delay: 150ms; }
+.stagger-item:nth-child(n+7) { animation-delay: 160ms; }
+
+/* ── Spinner — fast = perceived as faster ───────────────────────────────── */
+
+@keyframes spin-fast {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin-fast 0.6s linear infinite;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item {
+    animation: none;
+    opacity: 1;
+  }
+  button:not(:disabled):active {
+    transform: none;
+  }
+  .modal-enter, .overlay-enter {
+    animation: none;
+  }
 }
