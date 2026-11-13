@@ -19,23 +19,27 @@ import { prisma } from "@/lib/db";
 const ALLOWED_ROLES = ["student", "examiner", "admin", "hod"] as const;
 
 function getServerTOTPKey(): Buffer {
+  if (process.env.TOTP_ENCRYPTION_KEY) {
+    return Buffer.from(process.env.TOTP_ENCRYPTION_KEY, "hex");
+  }
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET not set");
+  if (!secret) throw new Error("JWT_SECRET or TOTP_ENCRYPTION_KEY not set");
   return hkdfDerive(Buffer.from(secret, "utf-8"), null, "totp-secret-encryption-key", 32);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { usn, email, name, password, role, ed25519PubKey, ecdsaPubKey } = body;
+    const { usn, email, name, password, ed25519PubKey, ecdsaPubKey } = body;
 
     // ── Input validation ───────────────────────────────────────────────
-    if (!usn || !email || !name || !password || !role) {
+    if (!usn || !email || !name || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    if (!ALLOWED_ROLES.includes(role)) {
-      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-    }
+    // Security policy: Public self-registration ALWAYS provisions "student" role.
+    // Privileged accounts (examiner, admin, hod) must be created by an authorized admin.
+    const role = "student";
+
     if (password.length < 12) {
       return NextResponse.json({ error: "Password must be at least 12 characters" }, { status: 400 });
     }

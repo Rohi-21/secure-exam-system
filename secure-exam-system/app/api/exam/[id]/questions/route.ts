@@ -6,8 +6,9 @@
  *
  * This provides a double layer: TLS + application-layer ECDH session key.
  *
- * Header: x-session-id — the session ID from the ECDH handshake
- * Query:  ?questionNo=1 (optional — omit for all)
+ * Headers:
+ *   x-exam-session-id — the session ID from the ECDH handshake (or x-session-id)
+ *   Authorization     — Bearer JWT
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,6 +16,7 @@ import { prisma } from "@/lib/db";
 import { envelopeDecrypt } from "@/lib/crypto/envelope";
 import { encryptAES256GCM } from "@/lib/crypto/aes";
 import { sessionKeyStore } from "../ecdh-handshake/route";
+import { sessionStore } from "@/lib/store/session-store";
 import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 export async function GET(
@@ -23,17 +25,32 @@ export async function GET(
 ) {
   try {
     const studentId = req.headers.get("x-user-id");
-    const sessionId = req.headers.get("x-session-id") ?? req.nextUrl.searchParams.get("sessionId") ?? "";
+    const sessionId =
+      req.headers.get("x-exam-session-id") ??
+      req.headers.get("x-session-id") ??
+      req.nextUrl.searchParams.get("sessionId") ??
+      "";
     const { id: examId } = await params;
 
-    // ── Validate session ──────────────────────────────────────────────
-    const session = sessionKeyStore.get(sessionId);
-    if (!session || session.studentId !== studentId || session.examId !== examId) {
-      return NextResponse.json({ error: "Invalid or expired exam session. Run ECDH handshake first." }, { status: 401 });
+    // ── Validate exam timing and status ───────────────────────────────
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+
+    const now = new Date();
+    if (exam.status !== "active" && exam.status !== "scheduled") {
+      return NextResponse.json({ error: "Exam is not currently active" }, { status: 400 });
     }
-    if (Date.now() > session.expiresAt) {
-      sessionKeyStore.delete(sessionId);
-      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+    if (now < exam.startTime || now > exam.endTime) {
+      return NextResponse.json({ error: "Exam window is closed" }, { status: 400 });
+    }
+
+    // ── Validate session ──────────────────────────────────────────────
+    const session = sessionStore.getExamSession(sessionId) ?? sessionKeyStore.get(sessionId);
+    if (!session || session.studentId !== studentId || session.examId !== examId) {
+      return NextResponse.json(
+        { error: "Invalid or expired exam session. Run ECDH handshake first." },
+        { status: 401 }
+      );
     }
 
     // ── Fetch questions from DB ───────────────────────────────────────
@@ -46,16 +63,11 @@ export async function GET(
       return NextResponse.json({ error: "No questions found for this exam" }, { status: 404 });
     }
 
-    // ── Need ExamKEK to decrypt questions — reconstruct via Shamir ────
-    // For the GET path, the ExamKEK must come from the examiner's RSA path
-    // OR from an in-memory cache set during the exam open ceremony.
-    // Here we implement the examiner RSA path:
-    // The server decrypts using the examKEK passed at exam start (cached in process).
-    // For the prototype, we store it temporarily via a separate /api/keys/cache route.
-    const cachedKEK = examKEKCache.get(examId);
+    // ── Need ExamKEK to decrypt questions ─────────────────────────────
+    const cachedKEK = sessionStore.getExamKEK(examId) ?? examKEKCache.get(examId);
     if (!cachedKEK) {
       return NextResponse.json(
-        { error: "ExamKEK not in server cache. Examiner must run /api/keys/cache-kek first." },
+        { error: "ExamKEK not in server cache. Examiner must run /api/keys/cache-kek or complete Shamir reconstruction first." },
         { status: 503 }
       );
     }
@@ -107,7 +119,14 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ questions: deliveredQuestions, total: deliveredQuestions.length });
+    return NextResponse.json({
+      questions: deliveredQuestions,
+      total: deliveredQuestions.length,
+      durationMins: exam.durationMins,
+      startTime: exam.startTime.toISOString(),
+      endTime: exam.endTime.toISOString(),
+      serverTime: now.toISOString(),
+    });
 
   } catch (err) {
     console.error("[questions]", err);
@@ -115,6 +134,5 @@ export async function GET(
   }
 }
 
-// ── In-process ExamKEK cache (set by /api/keys/cache-kek during exam open) ──
-// TTL matches exam end time. Never persisted to DB.
+// ── In-process ExamKEK cache (set by /api/keys/cache-kek or Shamir reconstruction)
 export const examKEKCache = new Map<string, Buffer>();

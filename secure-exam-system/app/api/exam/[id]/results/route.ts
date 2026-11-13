@@ -24,6 +24,7 @@ import { ed25519Verify } from "@/lib/crypto/ed25519";
 import { sha256Hex } from "@/lib/crypto/hash";
 import { sessionKeyStore } from "../ecdh-handshake/route";
 import { examKEKCache } from "../questions/route";
+import { sessionStore } from "@/lib/store/session-store";
 import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 export async function GET(
@@ -32,17 +33,13 @@ export async function GET(
 ) {
   try {
     const studentId = req.headers.get("x-user-id")!;
-    const sessionId = req.headers.get("x-session-id") ?? req.nextUrl.searchParams.get("sessionId") ?? "";
+    const sessionId = req.headers.get("x-exam-session-id") ?? req.headers.get("x-session-id") ?? req.nextUrl.searchParams.get("sessionId") ?? "";
     const { id: examId } = await params;
 
-    // ── Validate ECDH session ─────────────────────────────────────────
-    const session = sessionKeyStore.get(sessionId);
-    if (!session || session.studentId !== studentId || session.examId !== examId) {
-      return NextResponse.json(
-        { error: "Invalid session. Perform ECDH handshake first." },
-        { status: 401 }
-      );
-    }
+    // Optional ECDH session lookup for application-layer session encryption
+    const session = sessionId
+      ? (sessionStore.getExamSession(sessionId) ?? sessionKeyStore.get(sessionId))
+      : null;
 
     // ── Fetch result + its DEK ────────────────────────────────────────
     const result = await prisma.result.findFirst({
@@ -61,10 +58,10 @@ export async function GET(
     }
 
     // ── Get ExamKEK ───────────────────────────────────────────────────
-    const examKEK = examKEKCache.get(examId);
+    const examKEK = sessionStore.getExamKEK(examId) ?? examKEKCache.get(examId);
     if (!examKEK) {
       return NextResponse.json(
-        { error: "Result decryption unavailable. Contact your examiner." },
+        { error: "Result decryption unavailable: ExamKEK not in memory. Contact your exam administrator." },
         { status: 503 }
       );
     }
@@ -96,36 +93,50 @@ export async function GET(
       ? ed25519Verify(auditPubKey, Buffer.from(resultCipherHash, "hex"), result.examinerSignature)
       : false;
 
-    // ── Re-encrypt with student's ECDH session key ────────────────────
-    const sessionAAD: EncryptionAAD = {
-      record_id: `result-${sessionId}`,
-      record_type: "result",
-      exam_id: examId,
-      user_id: studentId,
-      key_version: 1,
-      algorithm: "AES-256-GCM",
-    };
-    const sessionEncrypted = encryptAES256GCM(session.encKey, plainBuf, sessionAAD);
-
     // ── Fetch Merkle proof from submission ────────────────────────────
     const submission = await prisma.submission.findFirst({
       where: { studentId, examId },
       select: { merkleProof: true, contentHash: true, id: true },
     });
 
+    // ── Deliver either re-encrypted with ECDH session key, or directly over TLS ──
+    if (session) {
+      const sessionAAD: EncryptionAAD = {
+        record_id: `result-${sessionId}`,
+        record_type: "result",
+        exam_id: examId,
+        user_id: studentId,
+        key_version: 1,
+        algorithm: "AES-256-GCM",
+      };
+      const sessionEncrypted = encryptAES256GCM(session.encKey, plainBuf, sessionAAD);
+
+      return NextResponse.json({
+        encrypted: true,
+        result: {
+          ciphertext: sessionEncrypted.ciphertext,
+          authTag: sessionEncrypted.authTag,
+          iv: sessionEncrypted.iv,
+          aad: sessionEncrypted.aad,
+        },
+        examinerSignatureValid: sigValid,
+        examinerSignature: result.examinerSignature,
+        resultCipherHash,
+        merkleProof: submission?.merkleProof ? JSON.parse(submission.merkleProof) : null,
+        merkleRoot: result.merkleRoot,
+        submissionId: submission?.id,
+        contentHash: submission?.contentHash,
+      });
+    }
+
+    // Direct authenticated delivery
+    const parsedResult = JSON.parse(plainBuf.toString("utf-8"));
     return NextResponse.json({
-      // Result — encrypted with student's session key (student decrypts in browser)
-      result: {
-        ciphertext: sessionEncrypted.ciphertext,
-        authTag: sessionEncrypted.authTag,
-        iv: sessionEncrypted.iv,
-        aad: sessionEncrypted.aad,
-      },
-      // Proof of examiner endorsement
+      encrypted: false,
+      result: parsedResult,
       examinerSignatureValid: sigValid,
       examinerSignature: result.examinerSignature,
       resultCipherHash,
-      // Proof of batch inclusion
       merkleProof: submission?.merkleProof ? JSON.parse(submission.merkleProof) : null,
       merkleRoot: result.merkleRoot,
       submissionId: submission?.id,

@@ -30,11 +30,14 @@ const PUBLIC_PATHS = [
 
 // Role-based access rules — order matters (first match wins)
 const RBAC_RULES: Array<{ prefix: string; roles: string[] }> = [
+  { prefix: "/audit",         roles: ["admin", "hod"] },
+  { prefix: "/benchmarks",    roles: ["admin", "hod"] },
   { prefix: "/admin",         roles: ["admin", "hod"] },
   { prefix: "/api/admin",     roles: ["admin", "hod"] },
   { prefix: "/api/keys",      roles: ["examiner", "admin", "hod"] },
-  { prefix: "/examiner",      roles: ["examiner", "admin", "hod"] },
+  { prefix: "/exams",         roles: ["examiner", "admin", "hod"] },
   { prefix: "/exam",          roles: ["student"] },
+  { prefix: "/results",       roles: ["student", "examiner", "admin", "hod"] },
   { prefix: "/dashboard",     roles: ["student", "examiner", "admin", "hod"] },
   { prefix: "/api/exam",      roles: ["student", "examiner", "admin", "hod"] },
 ];
@@ -90,7 +93,9 @@ export default async function proxy(req: NextRequest) {
 
   // ── JWT verification ─────────────────────────────────────────────────
   const authHeader = req.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : (req.cookies.get("auth_token")?.value ?? null);
 
   if (!token) {
     if (pathname.startsWith("/api/")) {
@@ -129,7 +134,8 @@ export default async function proxy(req: NextRequest) {
   requestHeaders.set("x-user-id", payload.userId);
   requestHeaders.set("x-user-role", payload.role);
   requestHeaders.set("x-user-usn", payload.usn);
-  requestHeaders.set("x-session-id", payload.sessionId);
+  // Independent authenticated application session ID (distinct from x-exam-session-id)
+  requestHeaders.set("x-auth-session-id", payload.sessionId);
 
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

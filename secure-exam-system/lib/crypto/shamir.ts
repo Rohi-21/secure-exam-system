@@ -124,6 +124,43 @@ export async function reconstructKEK(
   return examKEK;
 }
 
+/**
+ * Decrypt a single trustee share with their individual passphrase.
+ */
+export async function decryptSingleShare(
+  share: EncryptedShare,
+  password: string,
+  examId: string
+): Promise<Buffer> {
+  const salt = Buffer.from(share.argon2Salt, "base64");
+  const shareKey = await argon2idDeriveKey(password, salt);
+  const aad = {
+    record_id: `${examId}-share-${share.shareIndex}`,
+    record_type: "key_share" as const,
+    exam_id: examId,
+    key_version: 1,
+    algorithm: "AES-256-GCM" as const,
+  };
+  return decryptAES256GCM(
+    shareKey,
+    {
+      ciphertext: share.encryptedShare,
+      authTag: share.shareAuthTag,
+      iv: share.shareIv,
+      aad: JSON.stringify(aad),
+      algorithm: "AES-256-GCM",
+    },
+    aad
+  );
+}
+
+/**
+ * Combine 2 or more raw decrypted Shamir shares into the 32-byte ExamKEK.
+ */
+export function combineRawShares(rawShares: Buffer[]): Buffer {
+  return sss.combine(rawShares);
+}
+
 /** Generate a fresh random ExamKEK (32 bytes) */
 export function generateExamKEK(): Buffer {
   return randomBytes(32);

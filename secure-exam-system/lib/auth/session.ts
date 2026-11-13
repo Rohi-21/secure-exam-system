@@ -10,9 +10,9 @@
 
 import { randomBytes } from "crypto";
 import { ed25519Verify } from "../crypto/ed25519";
+import { sessionStore } from "../store/session-store";
 
-/** Active challenges: nonce → { userId, expiresAt } */
-// In production use Redis; for the prototype, in-process Map is fine
+/** Active challenges: nonce → { userId, expiresAt } (fallback for unit tests) */
 const pendingChallenges = new Map<string, { userId: string; expiresAt: number }>();
 
 const CHALLENGE_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -22,14 +22,15 @@ const CHALLENGE_TTL_MS = 2 * 60 * 1000; // 2 minutes
  */
 export function issueChallenge(userId: string): string {
   const nonce = randomBytes(32).toString("hex");
+  sessionStore.setPendingChallenge(nonce, userId, CHALLENGE_TTL_MS);
   pendingChallenges.set(nonce, { userId, expiresAt: Date.now() + CHALLENGE_TTL_MS });
   return nonce;
 }
 
 /**
  * Verify an Ed25519 challenge response.
- * @param nonce       The challenge nonce issued by issueChallenge()
- * @param signature   base64 Ed25519 signature of the nonce by the user's private key
+ * @param nonce             The challenge nonce issued by issueChallenge()
+ * @param signature         base64 Ed25519 signature of the nonce by the user's private key
  * @param ed25519PubKeyPem  The user's Ed25519 public key (stored at registration)
  * @returns { valid: boolean; userId: string | null }
  */
@@ -38,12 +39,18 @@ export function verifyChallenge(
   signature: string,
   ed25519PubKeyPem: string
 ): { valid: boolean; userId: string | null } {
-  const record = pendingChallenges.get(nonce);
+  // First attempt from centralized sessionStore
+  const storeUserId = sessionStore.consumeChallenge(nonce);
+  let userId = storeUserId;
 
-  if (!record) return { valid: false, userId: null };
-  if (Date.now() > record.expiresAt) {
+  if (!userId) {
+    const record = pendingChallenges.get(nonce);
+    if (!record || Date.now() > record.expiresAt) {
+      pendingChallenges.delete(nonce);
+      return { valid: false, userId: null };
+    }
+    userId = record.userId;
     pendingChallenges.delete(nonce);
-    return { valid: false, userId: null };
   }
 
   // Verify Ed25519 signature: user signed the raw nonce bytes
@@ -53,6 +60,5 @@ export function verifyChallenge(
     signature
   );
 
-  pendingChallenges.delete(nonce); // One-time use — consume regardless of result
-  return { valid: isValid, userId: isValid ? record.userId : null };
+  return { valid: isValid, userId: isValid ? userId : null };
 }

@@ -13,7 +13,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getBrowserKeys } from "../register/page";
+import { getBrowserKeys, storeBrowserKeys } from "../register/page";
+import { loadDeviceKeys } from "@/lib/crypto/client-keystore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -48,12 +49,18 @@ export default function LoginPage() {
       const { challengeNonce, userId } = loginData;
 
       // ── Step 2: Ed25519 session binding ───────────────────────────────
-      const keys = getBrowserKeys();
+      let keys = getBrowserKeys();
       if (!keys?.ed25519Private) {
-        // Keys not in memory — either page was refreshed or different device.
-        // For now, skip binding (graceful degradation — still 2FA secured).
-        // In production: re-derive from stored key reference or prompt re-registration.
-        console.warn("[login] Ed25519 private key not in memory. Proceeding without session binding.");
+        const loaded = await loadDeviceKeys();
+        if (loaded) {
+          keys = loaded;
+          storeBrowserKeys(keys);
+        }
+      }
+
+      if (!keys?.ed25519Private) {
+        // Keys not on this device/browser
+        console.warn("[login] Ed25519 private key not found in storage. Proceeding with standard authentication.");
         await completeLogin(userId, challengeNonce, null);
         return;
       }

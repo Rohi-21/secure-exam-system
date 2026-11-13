@@ -15,7 +15,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import QRCode from "qrcode"; // npm install qrcode @types/qrcode
+import QRCode from "qrcode";
+import { saveDeviceKeys } from "@/lib/crypto/client-keystore";
 
 type Step = "form" | "qr" | "done";
 
@@ -79,8 +80,15 @@ export default function RegisterPage() {
       const ed25519PubKey = btoa(String.fromCharCode(...new Uint8Array(ed25519PubRaw)));
       const ecdsaPubKey = btoa(String.fromCharCode(...new Uint8Array(ecdsaPubRaw)));
 
-      // Store private keys in sessionStorage as CryptoKey references
-      // We can't export them, so we store them in a module-level Map (see below)
+      // Persist private keys in browser IndexedDB (survives reloads and page navigations)
+      await saveDeviceKeys({
+        ed25519Private: ed25519KeyPair.privateKey,
+        ed25519Public: ed25519KeyPair.publicKey,
+        ecdsaPrivate: ecdsaKeyPair.privateKey,
+        ecdsaPublic: ecdsaKeyPair.publicKey,
+      });
+
+      // Also set in memory for current page session
       storeBrowserKeys({
         ed25519Private: ed25519KeyPair.privateKey,
         ecdsaPrivate: ecdsaKeyPair.privateKey,
@@ -88,7 +96,7 @@ export default function RegisterPage() {
         ed25519Public: ed25519KeyPair.publicKey,
       });
 
-      // ── Send to server ───────────────────────────────────────────────
+      // ── Send to server (Public registration is strictly student role) ─
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,7 +105,6 @@ export default function RegisterPage() {
           email: form.email,
           name: form.name,
           password: form.password,
-          role: form.role,
           ed25519PubKey,
           ecdsaPubKey,
         }),
@@ -190,22 +197,8 @@ export default function RegisterPage() {
               </div>
             ))}
 
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Role</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm"
-              >
-                <option value="student">Student</option>
-                <option value="examiner">Examiner</option>
-                <option value="admin">Admin</option>
-                <option value="hod">HOD</option>
-              </select>
-            </div>
-
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-300">
-              🔑 Cryptographic keys will be generated securely in your browser. Your private key never leaves this device.
+              🔑 Cryptographic device keys are generated and stored securely in this browser. Your private key never leaves this device.
             </div>
 
             <button

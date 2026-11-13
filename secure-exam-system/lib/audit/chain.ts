@@ -16,6 +16,8 @@ import { createHash, createSign, createVerify, createPrivateKey, createPublicKey
 import { hashChainEntry, sha256Hex, GENESIS_HASH } from "../crypto/hash";
 import { ed25519Sign, ed25519Verify } from "../crypto/ed25519";
 
+export { GENESIS_HASH };
+
 export interface AuditEntry {
   sequenceNo: number;
   eventType: string;
@@ -157,11 +159,69 @@ export const AuditEventType = {
   EXAM_CREATED: "EXAM_CREATED",
   EXAM_PAPER_UPLOADED: "EXAM_PAPER_UPLOADED",
   COMMITMENT_PUBLISHED: "COMMITMENT_PUBLISHED",
+  EXAM_SCHEDULED: "EXAM_SCHEDULED",
+  EXAM_ACTIVATED: "EXAM_ACTIVATED",
+  EXAM_CLOSED: "EXAM_CLOSED",
   EXAM_SESSION_STARTED: "EXAM_SESSION_STARTED",
   SUBMISSION_RECEIVED: "SUBMISSION_RECEIVED",
+  TRUSTEE_APPROVAL_RECORDED: "TRUSTEE_APPROVAL_RECORDED",
   SHAMIR_RECONSTRUCTION: "SHAMIR_RECONSTRUCTION",
   EVALUATION_COMPLETED: "EVALUATION_COMPLETED",
   COMMITMENT_REVEALED: "COMMITMENT_REVEALED",
+  RESULT_FINALIZED: "RESULT_FINALIZED",
   RESULT_RELEASED: "RESULT_RELEASED",
   CHAIN_HEAD_ANCHORED: "CHAIN_HEAD_ANCHORED",
 } as const;
+
+/**
+ * Server-side trusted helper to append an audit entry with concurrency-safe sequence numbering.
+ */
+export async function appendAuditLog(
+  eventType: string,
+  actorId: string | undefined,
+  examId: string | undefined,
+  eventData: Record<string, unknown>,
+  auditPrivKeyPem: string,
+  ipAddress?: string
+): Promise<AuditEntry> {
+  const { prisma } = await import("@/lib/db");
+
+  // Fetch the latest entry to compute next sequence and prevHash
+  const lastEntry = await prisma.auditLog.findFirst({
+    orderBy: { sequenceNo: "desc" },
+    select: { sequenceNo: true, entryHash: true },
+  });
+
+  const prevHash = lastEntry?.entryHash ?? GENESIS_HASH;
+  const sequenceNo = (lastEntry?.sequenceNo ?? 0) + 1;
+
+  const entry = buildAuditEntry(
+    prevHash,
+    sequenceNo,
+    {
+      eventType,
+      actorId,
+      examId,
+      ipAddress,
+      eventData,
+    },
+    auditPrivKeyPem
+  );
+
+  await prisma.auditLog.create({
+    data: {
+      sequenceNo: entry.sequenceNo,
+      eventType: entry.eventType,
+      actorId: entry.actorId ?? null,
+      examId: entry.examId ?? null,
+      ipAddress: entry.ipAddress ?? null,
+      eventData: JSON.stringify(entry.eventData),
+      timestamp: new Date(entry.timestamp),
+      prevHash: entry.prevHash,
+      entryHash: entry.entryHash,
+      auditSig: entry.auditSig,
+    },
+  });
+
+  return entry;
+}

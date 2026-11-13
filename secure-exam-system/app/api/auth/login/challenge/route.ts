@@ -75,6 +75,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    response.cookies.set("auth_token", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
+
     response.cookies.set(COOKIE_NAME, rawRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

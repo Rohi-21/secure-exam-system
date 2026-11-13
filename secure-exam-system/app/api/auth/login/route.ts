@@ -22,6 +22,9 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
 function getServerTOTPKey(): Buffer {
+  if (process.env.TOTP_ENCRYPTION_KEY) {
+    return Buffer.from(process.env.TOTP_ENCRYPTION_KEY, "hex");
+  }
   return hkdfDerive(
     Buffer.from(process.env.JWT_SECRET!, "utf-8"),
     null,
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
       aad: JSON.stringify(aad), algorithm: "AES-256-GCM",
     }, aad).toString("utf-8");
 
-    if (!verifyTOTP(secretBase32, totpCode)) {
+    if (!verifyTOTP(secretBase32, totpCode, user.id)) {
       await prisma.loginAttempt.create({ data: { usn, ipAddress: ip, success: false } });
       return NextResponse.json({ error: "Invalid TOTP code" }, { status: 401 });
     }

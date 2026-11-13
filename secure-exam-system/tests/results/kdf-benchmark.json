@@ -1,33 +1,27 @@
 {
-  "timestamp": "2026-11-12T16:30:36.054Z",
+  "timestamp": "2026-11-12T18:56:07.980Z",
   "results": [
     {
-      "algorithm": "Argon2id",
+      "algorithm": "Argon2id (RFC 9106)",
       "parameters": {
         "memoryCost_KB": 65536,
         "timeCost": 3,
         "parallelism": 4
       },
-      "avgHashMs": 280.64,
-      "opsPerSec": 3.56,
+      "iterationsMeasured": 8,
+      "statsMs": {
+        "meanMs": 53.36,
+        "medianMs": 52.63,
+        "stdDevMs": 2.4,
+        "p95Ms": 57.79,
+        "minMs": 50.69,
+        "maxMs": 57.79
+      },
+      "opsPerSec": 19,
       "memoryMB": 64,
       "rfcCompliant": true,
-      "recommendation": "✅ OUR CHOICE — RFC 9106 compliant. Best resistance to GPU/ASIC attacks.",
-      "hashSample": "$argon2id$v=19$m=65536,t=3,p=4$SfRQawAJR…"
-    },
-    {
-      "algorithm": "PBKDF2-SHA256 (100K iter)",
-      "parameters": {
-        "iterations": 100000,
-        "keyLength": 32,
-        "digest": "SHA-256"
-      },
-      "avgHashMs": 27.97,
-      "opsPerSec": 35.76,
-      "memoryMB": "~0 (CPU-only)",
-      "rfcCompliant": true,
-      "recommendation": "❌ Below NIST minimum (600K iterations for SHA-256). Insufficient.",
-      "hashSample": "2b0285fa00502c7e303032159d17a337ea96b560…"
+      "recommendation": "SELECTED — Memory-hard construction resistant to GPU/FPGA/ASIC parallel cracking.",
+      "hashSample": "$argon2id$v=19$m=65536,t=3,p=4$IcdtfuQLwClgAy…"
     },
     {
       "algorithm": "PBKDF2-SHA256 (600K iter)",
@@ -36,38 +30,63 @@
         "keyLength": 32,
         "digest": "SHA-256"
       },
-      "avgHashMs": 173.19,
-      "opsPerSec": 5.77,
+      "iterationsMeasured": 15,
+      "statsMs": {
+        "meanMs": 172.2,
+        "medianMs": 171.04,
+        "stdDevMs": 7.08,
+        "p95Ms": 196.82,
+        "minMs": 165.97,
+        "maxMs": 196.82
+      },
+      "opsPerSec": 5.85,
       "memoryMB": "~0 (CPU-only)",
       "rfcCompliant": true,
-      "recommendation": "⚠️  NIST min 600K iterations for SHA-256. CPU-only — vulnerable to GPU attacks.",
-      "hashSample": "85327dc867b0efdbb21bdd8ad87131ef933e5d11…"
+      "recommendation": "Meets NIST SP 800-132 iteration recommendation, but lacks memory-hardness against GPU acceleration.",
+      "hashSample": "19e55ce7823d022bc443e40cdf699e1361bf99cb4cf16…"
     },
     {
-      "algorithm": "bcrypt (cost 10)",
+      "algorithm": "PBKDF2-SHA256 (100K iter)",
       "parameters": {
-        "costFactor": 10,
-        "outputLength": 60
+        "iterations": 100000,
+        "keyLength": 32,
+        "digest": "SHA-256"
       },
-      "avgHashMs": 60.05,
-      "opsPerSec": 16.65,
-      "memoryMB": "4KB (fixed — not memory-hard by modern standards)",
-      "rfcCompliant": false,
-      "recommendation": "❌ Cost factor too low. Minimum recommended: 12.",
-      "hashSample": "$2b$10$wU636ZdJUnlb1sVnhPbFW.R8o0Aa3XQEV…"
+      "iterationsMeasured": 15,
+      "statsMs": {
+        "meanMs": 29.69,
+        "medianMs": 28.03,
+        "stdDevMs": 4.98,
+        "p95Ms": 46.32,
+        "minMs": 26.72,
+        "maxMs": 46.32
+      },
+      "opsPerSec": 35.68,
+      "memoryMB": "~0 (CPU-only)",
+      "rfcCompliant": true,
+      "recommendation": "Below NIST minimum (600,000 iterations for SHA-256). Vulnerable to dictionary attacks.",
+      "hashSample": "1e7a72cea2d9c0189f1304f7cc53b5dcf1edcc9a25091…"
     },
     {
-      "algorithm": "bcrypt (cost 12)",
+      "algorithm": "bcrypt (work factor 12)",
       "parameters": {
         "costFactor": 12,
         "outputLength": 60
       },
-      "avgHashMs": 223.63,
-      "opsPerSec": 4.47,
-      "memoryMB": "4KB (fixed — not memory-hard by modern standards)",
+      "iterationsMeasured": 6,
+      "statsMs": {
+        "meanMs": 219.29,
+        "medianMs": 218.57,
+        "stdDevMs": 1.98,
+        "p95Ms": 222.7,
+        "minMs": 217,
+        "maxMs": 222.7
+      },
+      "opsPerSec": 4.58,
+      "memoryMB": "0.004 (4KB Blowfish table)",
       "rfcCompliant": false,
-      "recommendation": "⚠️  Acceptable legacy choice. Fixed 4KB memory — vulnerable to ASIC. Prefer Argon2id.",
-      "hashSample": "$2b$12$tcvaKg0wRvqH7HvvcPY.JOO8E/Zw2/wvi…"
+      "recommendation": "Classic password hash. Fixed 4KB memory cost makes it vulnerable to modern GPU clusters.",
+      "hashSample": "$2b$12$XojyN4EAewg0sSwqBfgqQOTp831tvbywZ97KAc…"
     }
   ]
 }

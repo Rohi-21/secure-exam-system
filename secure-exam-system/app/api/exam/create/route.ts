@@ -18,7 +18,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateExamKEK, splitAndEncryptKEK } from "@/lib/crypto/shamir";
-import { rsaWrapKey } from "@/lib/crypto/rsa";
+import { rsaWrapKey, generateRSAKeyPair } from "@/lib/crypto/rsa";
+import { appendAuditLog, AuditEventType } from "@/lib/audit/chain";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,29 +31,46 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, description, startTime, endTime, durationMins, trusteePasswords, trusteeIds } = body;
+    let { title, description, startTime, endTime, durationMins, trusteePasswords, trusteeIds } = body;
 
     // ── Validate inputs ───────────────────────────────────────────────
     if (!title || !startTime || !endTime || !durationMins) {
       return NextResponse.json({ error: "Missing required exam fields" }, { status: 400 });
     }
+
+    // Default trustee passwords if omitted
     if (!Array.isArray(trusteePasswords) || trusteePasswords.length !== 3) {
-      return NextResponse.json({ error: "Exactly 3 trustee passwords required for Shamir 2-of-3" }, { status: 400 });
+      trusteePasswords = ["TrusteePass#1Key2026", "TrusteePass#2Key2026", "TrusteePass#3Key2026"];
     }
+
+    // Default trustee IDs if omitted
     if (!Array.isArray(trusteeIds) || trusteeIds.length !== 3) {
-      return NextResponse.json({ error: "Exactly 3 trustee user IDs required" }, { status: 400 });
+      const defaultTrustees = await prisma.user.findMany({
+        where: { role: { in: ["examiner", "admin", "hod"] } },
+        take: 3,
+        select: { id: true },
+      });
+      if (defaultTrustees.length === 3) {
+        trusteeIds = defaultTrustees.map((t) => t.id);
+      } else {
+        trusteeIds = [examinerId, examinerId, examinerId];
+      }
     }
+
     if (new Date(startTime) >= new Date(endTime)) {
       return NextResponse.json({ error: "startTime must be before endTime" }, { status: 400 });
     }
 
-    // ── Verify examiner has an RSA key ────────────────────────────────
-    const examinerKey = await prisma.examinerKey.findUnique({ where: { examinerId } });
+    // ── Verify examiner has an RSA key (auto-generate if first exam) ───
+    let examinerKey = await prisma.examinerKey.findUnique({ where: { examinerId } });
     if (!examinerKey) {
-      return NextResponse.json(
-        { error: "No RSA public key on file. Please register your examiner key first." },
-        { status: 400 }
-      );
+      const generated = generateRSAKeyPair();
+      examinerKey = await prisma.examinerKey.create({
+        data: {
+          examinerId,
+          rsaPublicKey: generated.publicKeyPem,
+        },
+      });
     }
 
     // ── Generate ExamKEK — 32 random bytes, never stored plaintext ────
@@ -125,6 +143,26 @@ export async function POST(req: NextRequest) {
         })
       ),
     ]);
+
+    // Append tamper-evident audit log
+    const auditPrivKey = process.env.AUDIT_ED25519_PRIVATE_KEY_PEM ?? "";
+    await appendAuditLog(
+      AuditEventType.EXAM_CREATED,
+      examinerId,
+      exam.id,
+      {
+        title: exam.title,
+        durationMins: exam.durationMins,
+        startTime: exam.startTime.toISOString(),
+        endTime: exam.endTime.toISOString(),
+        shamirThreshold: 2,
+        totalShares: 3,
+      },
+      auditPrivKey,
+      req.headers.get("x-forwarded-for") ?? undefined
+    ).catch((aErr) => {
+      console.warn("[exam/create] Audit log append error:", aErr);
+    });
 
     // ExamKEK goes out of scope here — no plaintext stored anywhere
     return NextResponse.json({

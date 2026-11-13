@@ -22,7 +22,14 @@ export async function POST(req: NextRequest) {
     }
 
     const response = NextResponse.json({ message: "Logged out" });
-    // Clear the cookie
+    // Clear the cookies
+    response.cookies.set("auth_token", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
     response.cookies.set(COOKIE_NAME, "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

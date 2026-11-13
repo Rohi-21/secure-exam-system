@@ -24,6 +24,7 @@ import { prisma } from "@/lib/db";
 import { serverHandshake } from "@/lib/crypto/ecdh";
 import { ed25519Sign, buildHandshakePayload } from "@/lib/crypto/ed25519";
 import { randomBytes } from "crypto";
+import { sessionStore } from "@/lib/store/session-store";
 
 // In-process session key store: sessionId → { encKey, authKey, ivSeed, studentId, examId }
 // In production: use Redis with TTL = exam duration
@@ -83,10 +84,11 @@ export async function POST(
       sessionId
     );
 
-    // ── Sign the handshake payload with server Ed25519 key ────────────
+    // ── Sign the complete handshake transcript with server Ed25519 key ─
     const serverPrivKey = process.env.SERVER_ED25519_PRIVATE_KEY_PEM ?? "";
     const payloadBuf = buildHandshakePayload({
       serverEphemeralPubKeyB64,
+      clientEphemeralPubKeyB64,
       examId,
       sessionId,
       nonce,
@@ -95,18 +97,32 @@ export async function POST(
     });
     const signature = serverPrivKey
       ? ed25519Sign(serverPrivKey, payloadBuf)
-      : "no-server-key-configured"; // Dev fallback
+      : "no-server-key-configured";
 
-    // ── Store session keys (never in DB) ──────────────────────────────
+    // ── Store session keys in TTL-enforced store (never DB) ────────────
     const examDurationMs = exam.durationMins * 60 * 1000;
+    const ttlMs = examDurationMs + 300_000; // duration + 5 min grace
+
     sessionKeyStore.set(sessionId, {
       encKey: sessionKeys.encKey,
       authKey: sessionKeys.authKey,
       ivSeed: sessionKeys.ivSeed,
       studentId: studentId!,
       examId,
-      expiresAt: Date.now() + examDurationMs + 300_000, // +5 min grace
+      expiresAt: Date.now() + ttlMs,
     });
+
+    sessionStore.setExamSession(
+      sessionId,
+      {
+        encKey: sessionKeys.encKey,
+        authKey: sessionKeys.authKey,
+        ivSeed: sessionKeys.ivSeed,
+        studentId: studentId!,
+        examId,
+      },
+      ttlMs
+    );
 
     // ── Create / update ExamSession in DB ─────────────────────────────
     await prisma.examSession.upsert({
@@ -130,6 +146,8 @@ export async function POST(
       signature,
       nonce,
       timestamp,
+      examId,
+      studentId: studentId!,
       serverEd25519PubKey: process.env.SERVER_ED25519_PUBLIC_KEY_PEM ?? "",
     });
 
@@ -138,3 +156,4 @@ export async function POST(
     return NextResponse.json({ error: "Handshake failed" }, { status: 500 });
   }
 }
+

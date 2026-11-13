@@ -49,14 +49,20 @@ export function generateTOTPUri(userEmail: string, secretBase32: string): string
   return totp.toString(); // otpauth:// URI
 }
 
+// In-memory tracker for consumed TOTP time steps: userId -> lastConsumedStep
+const consumedTimeSteps = new Map<string, number>();
+
 /**
- * Verify a TOTP code provided by the user.
+ * Verify a TOTP code provided by the user with anti-replay protection.
  * Accepts ±1 window (30s each side) to handle clock skew.
+ * Prevents replay of the same token within the same time window.
+ *
  * @param secretBase32  User's stored TOTP secret (base32)
  * @param token         6-digit code from authenticator app
- * @returns true if valid; false if wrong or expired
+ * @param userId        Optional user ID for replay protection tracking
+ * @returns true if valid and not replayed; false otherwise
  */
-export function verifyTOTP(secretBase32: string, token: string): boolean {
+export function verifyTOTP(secretBase32: string, token: string, userId?: string): boolean {
   try {
     const totp = new OTPAuth.TOTP({
       issuer: ISSUER,
@@ -65,9 +71,23 @@ export function verifyTOTP(secretBase32: string, token: string): boolean {
       period: PERIOD,
       secret: OTPAuth.Secret.fromBase32(secretBase32),
     });
-    // Returns the delta (time steps) if valid, null if invalid
-    const delta = totp.validate({ token: token.replace(/\s/g, ""), window: WINDOW });
-    return delta !== null;
+
+    const cleanToken = token.replace(/\s/g, "");
+    // Returns the delta (time steps: -1, 0, or 1) if valid, null if invalid
+    const delta = totp.validate({ token: cleanToken, window: WINDOW });
+    if (delta === null) return false;
+
+    if (userId) {
+      const step = Math.floor(Date.now() / 1000 / PERIOD) + delta;
+      const lastStep = consumedTimeSteps.get(userId);
+      if (lastStep !== undefined && step <= lastStep) {
+        // Replay of code from same or earlier time step
+        return false;
+      }
+      consumedTimeSteps.set(userId, step);
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -85,4 +105,60 @@ export function generateCurrentToken(secretBase32: string): string {
     secret: OTPAuth.Secret.fromBase32(secretBase32),
   });
   return totp.generate();
+}
+
+import { encryptAES256GCM, decryptAES256GCM } from "../crypto/aes";
+import { createHash } from "crypto";
+
+function getServerTOTPKey(): Buffer {
+  const envKey = process.env.TOTP_ENCRYPTION_KEY;
+  if (envKey && envKey.length === 64) {
+    return Buffer.from(envKey, "hex");
+  }
+  const secret = process.env.JWT_SECRET ?? "default-totp-key-32-bytes-long!";
+  return createHash("sha256").update(secret).digest();
+}
+
+/**
+ * Encrypt a base32 TOTP secret under server key using AES-256-GCM.
+ */
+export function encryptTOTPSecret(secretBase32: string, usn: string = "default"): string {
+  const key = getServerTOTPKey();
+  const aad = {
+    record_id: `totp-${usn}`,
+    record_type: "totp_secret" as const,
+    key_version: 1,
+    algorithm: "AES-256-GCM" as const,
+  };
+  const encrypted = encryptAES256GCM(key, Buffer.from(secretBase32, "utf-8"), aad);
+  return JSON.stringify({
+    c: encrypted.ciphertext,
+    t: encrypted.authTag,
+    i: encrypted.iv,
+  });
+}
+
+/**
+ * Decrypt a stored TOTP secret JSON string back to base32 secret.
+ */
+export function decryptTOTPSecret(storageJson: string, usn: string = "default"): string {
+  const key = getServerTOTPKey();
+  const stored = JSON.parse(storageJson);
+  const aad = {
+    record_id: `totp-${usn}`,
+    record_type: "totp_secret" as const,
+    key_version: 1,
+    algorithm: "AES-256-GCM" as const,
+  };
+  return decryptAES256GCM(
+    key,
+    {
+      ciphertext: stored.c,
+      authTag: stored.t,
+      iv: stored.i,
+      aad: JSON.stringify(aad),
+      algorithm: "AES-256-GCM",
+    },
+    aad
+  ).toString("utf-8");
 }

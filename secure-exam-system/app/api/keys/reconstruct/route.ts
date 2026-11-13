@@ -26,6 +26,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { reconstructKEK } from "@/lib/crypto/shamir";
 import { examKEKCache } from "@/app/api/exam/[id]/questions/route";
+import { sessionStore } from "@/lib/store/session-store";
+import { appendAuditLog, AuditEventType } from "@/lib/audit/chain";
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,12 +98,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Reconstructed key is invalid" }, { status: 500 });
     }
 
-    // ── Cache ExamKEK in-process for the exam duration ────────────────
-    const cacheTTL = exam.endTime.getTime() - Date.now() + 30 * 60 * 1000; // +30 min grace
-    if (cacheTTL > 0) {
-      examKEKCache.set(examId, examKEK);
-      setTimeout(() => examKEKCache.delete(examId), cacheTTL);
-    }
+    // ── Cache ExamKEK in sessionStore & memory for the exam duration ──
+    const cacheTTL = Math.max(3600_000, exam.endTime.getTime() - Date.now() + 30 * 60 * 1000);
+    examKEKCache.set(examId, examKEK);
+    sessionStore.setExamKEK(examId, examKEK, cacheTTL);
+
+    // Append tamper-evident audit log
+    const auditPrivKey = process.env.AUDIT_ED25519_PRIVATE_KEY_PEM ?? "";
+    await appendAuditLog(
+      AuditEventType.SHAMIR_RECONSTRUCTION,
+      actorId,
+      examId,
+      {
+        reconstructedBy: actorId,
+        trusteeCount: trustees.length,
+        cacheExpiresAt: new Date(Date.now() + cacheTTL).toISOString(),
+      },
+      auditPrivKey,
+      req.headers.get("x-forwarded-for") ?? undefined
+    ).catch(() => {});
 
     console.log(`[reconstruct] ExamKEK reconstructed for exam ${examId} by ${actorId}`);
 

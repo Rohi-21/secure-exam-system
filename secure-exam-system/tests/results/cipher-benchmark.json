@@ -1,149 +1,281 @@
 {
-  "timestamp": "2026-11-12T16:30:15.999Z",
+  "timestamp": "2026-11-12T18:55:47.090Z",
   "results": [
     {
       "algorithm": "AES-256-GCM",
       "payloadSizeBytes": 1024,
       "payloadSizeLabel": "1KB",
-      "encryptionsPerSec": 100474,
-      "decryptionsPerSec": 158972,
-      "encryptLatencyUs": 10,
-      "decryptLatencyUs": 6,
-      "throughputMBps": 98.12,
+      "iterations": 300,
+      "encryptionsPerSec": 181818,
+      "decryptionsPerSec": 188679,
+      "encryptStatsUs": {
+        "mean": 8,
+        "median": 5,
+        "stdDev": 14,
+        "p95": 18
+      },
+      "decryptStatsUs": {
+        "mean": 10,
+        "median": 5,
+        "stdDev": 40,
+        "p95": 17
+      },
+      "throughputMBps": 177.6,
       "authenticationIncluded": true,
-      "notes": "AEAD — recommended (our choice)"
+      "notes": "Authenticated AEAD (GHASH hardware accelerated via CLMUL/AES-NI). Preferred."
     },
     {
-      "algorithm": "AES-256-CBC+HMAC",
+      "algorithm": "AES-256-CBC + HMAC-SHA256",
       "payloadSizeBytes": 1024,
       "payloadSizeLabel": "1KB",
-      "encryptionsPerSec": 78839,
-      "decryptionsPerSec": 91590,
-      "encryptLatencyUs": 13,
-      "decryptLatencyUs": 11,
-      "throughputMBps": 76.99,
+      "iterations": 300,
+      "encryptionsPerSec": 107527,
+      "decryptionsPerSec": 116279,
+      "encryptStatsUs": {
+        "mean": 13,
+        "median": 9,
+        "stdDev": 13,
+        "p95": 41
+      },
+      "decryptStatsUs": {
+        "mean": 12,
+        "median": 9,
+        "stdDev": 10,
+        "p95": 29
+      },
+      "throughputMBps": 105,
       "authenticationIncluded": true,
-      "notes": "Encrypt-then-MAC (legacy)"
+      "notes": "Encrypt-then-MAC composite. Requires two independent cryptographic passes."
     },
     {
-      "algorithm": "AES-256-CTR (no auth)",
+      "algorithm": "AES-256-CTR",
       "payloadSizeBytes": 1024,
       "payloadSizeLabel": "1KB",
-      "encryptionsPerSec": 234390,
-      "decryptionsPerSec": 193469,
-      "encryptLatencyUs": 4,
-      "decryptLatencyUs": 5,
-      "throughputMBps": 228.9,
+      "iterations": 300,
+      "encryptionsPerSec": 217391,
+      "decryptionsPerSec": 212766,
+      "encryptStatsUs": {
+        "mean": 6,
+        "median": 5,
+        "stdDev": 6,
+        "p95": 15
+      },
+      "decryptStatsUs": {
+        "mean": 6,
+        "median": 5,
+        "stdDev": 6,
+        "p95": 10
+      },
+      "throughputMBps": 212.3,
       "authenticationIncluded": false,
-      "notes": "Stream, no authentication"
+      "notes": "Stream cipher mode without authentication. For throughput comparison only."
     },
     {
       "algorithm": "AES-256-GCM",
       "payloadSizeBytes": 16384,
       "payloadSizeLabel": "16KB",
-      "encryptionsPerSec": 42698,
-      "decryptionsPerSec": 43238,
-      "encryptLatencyUs": 23,
-      "decryptLatencyUs": 23,
-      "throughputMBps": 667.16,
+      "iterations": 300,
+      "encryptionsPerSec": 50505,
+      "decryptionsPerSec": 48780,
+      "encryptStatsUs": {
+        "mean": 27,
+        "median": 20,
+        "stdDev": 39,
+        "p95": 46
+      },
+      "decryptStatsUs": {
+        "mean": 31,
+        "median": 21,
+        "stdDev": 44,
+        "p95": 56
+      },
+      "throughputMBps": 789.1,
       "authenticationIncluded": true,
-      "notes": "AEAD — recommended (our choice)"
+      "notes": "Authenticated AEAD (GHASH hardware accelerated via CLMUL/AES-NI). Preferred."
     },
     {
-      "algorithm": "AES-256-CBC+HMAC",
+      "algorithm": "AES-256-CBC + HMAC-SHA256",
       "payloadSizeBytes": 16384,
       "payloadSizeLabel": "16KB",
-      "encryptionsPerSec": 23993,
-      "decryptionsPerSec": 26953,
-      "encryptLatencyUs": 42,
-      "decryptLatencyUs": 37,
-      "throughputMBps": 374.89,
+      "iterations": 300,
+      "encryptionsPerSec": 28490,
+      "decryptionsPerSec": 28818,
+      "encryptStatsUs": {
+        "mean": 46,
+        "median": 35,
+        "stdDev": 54,
+        "p95": 94
+      },
+      "decryptStatsUs": {
+        "mean": 50,
+        "median": 35,
+        "stdDev": 128,
+        "p95": 79
+      },
+      "throughputMBps": 445.2,
       "authenticationIncluded": true,
-      "notes": "Encrypt-then-MAC (legacy)"
+      "notes": "Encrypt-then-MAC composite. Requires two independent cryptographic passes."
     },
     {
-      "algorithm": "AES-256-CTR (no auth)",
+      "algorithm": "AES-256-CTR",
       "payloadSizeBytes": 16384,
       "payloadSizeLabel": "16KB",
-      "encryptionsPerSec": 42472,
-      "decryptionsPerSec": 52382,
-      "encryptLatencyUs": 24,
-      "decryptLatencyUs": 19,
-      "throughputMBps": 663.62,
+      "iterations": 300,
+      "encryptionsPerSec": 49261,
+      "decryptionsPerSec": 58309,
+      "encryptStatsUs": {
+        "mean": 24,
+        "median": 20,
+        "stdDev": 13,
+        "p95": 46
+      },
+      "decryptStatsUs": {
+        "mean": 21,
+        "median": 17,
+        "stdDev": 9,
+        "p95": 47
+      },
+      "throughputMBps": 769.7,
       "authenticationIncluded": false,
-      "notes": "Stream, no authentication"
+      "notes": "Stream cipher mode without authentication. For throughput comparison only."
     },
     {
       "algorithm": "AES-256-GCM",
       "payloadSizeBytes": 65536,
       "payloadSizeLabel": "64KB",
-      "encryptionsPerSec": 12486,
-      "decryptionsPerSec": 14201,
-      "encryptLatencyUs": 80,
-      "decryptLatencyUs": 70,
-      "throughputMBps": 780.38,
+      "iterations": 300,
+      "encryptionsPerSec": 15152,
+      "decryptionsPerSec": 15480,
+      "encryptStatsUs": {
+        "mean": 83,
+        "median": 66,
+        "stdDev": 74,
+        "p95": 140
+      },
+      "decryptStatsUs": {
+        "mean": 89,
+        "median": 65,
+        "stdDev": 118,
+        "p95": 203
+      },
+      "throughputMBps": 947,
       "authenticationIncluded": true,
-      "notes": "AEAD — recommended (our choice)"
+      "notes": "Authenticated AEAD (GHASH hardware accelerated via CLMUL/AES-NI). Preferred."
     },
     {
-      "algorithm": "AES-256-CBC+HMAC",
+      "algorithm": "AES-256-CBC + HMAC-SHA256",
       "payloadSizeBytes": 65536,
       "payloadSizeLabel": "64KB",
-      "encryptionsPerSec": 6612,
-      "decryptionsPerSec": 9320,
-      "encryptLatencyUs": 151,
-      "decryptLatencyUs": 107,
-      "throughputMBps": 413.28,
+      "iterations": 300,
+      "encryptionsPerSec": 7337,
+      "decryptionsPerSec": 10352,
+      "encryptStatsUs": {
+        "mean": 158,
+        "median": 136,
+        "stdDev": 69,
+        "p95": 292
+      },
+      "decryptStatsUs": {
+        "mean": 116,
+        "median": 97,
+        "stdDev": 74,
+        "p95": 214
+      },
+      "throughputMBps": 458.5,
       "authenticationIncluded": true,
-      "notes": "Encrypt-then-MAC (legacy)"
+      "notes": "Encrypt-then-MAC composite. Requires two independent cryptographic passes."
     },
     {
-      "algorithm": "AES-256-CTR (no auth)",
+      "algorithm": "AES-256-CTR",
       "payloadSizeBytes": 65536,
       "payloadSizeLabel": "64KB",
-      "encryptionsPerSec": 14227,
-      "decryptionsPerSec": 13814,
-      "encryptLatencyUs": 70,
-      "decryptLatencyUs": 72,
-      "throughputMBps": 889.22,
+      "iterations": 300,
+      "encryptionsPerSec": 16764,
+      "decryptionsPerSec": 16906,
+      "encryptStatsUs": {
+        "mean": 86,
+        "median": 60,
+        "stdDev": 115,
+        "p95": 171
+      },
+      "decryptStatsUs": {
+        "mean": 82,
+        "median": 59,
+        "stdDev": 93,
+        "p95": 183
+      },
+      "throughputMBps": 1047.8,
       "authenticationIncluded": false,
-      "notes": "Stream, no authentication"
+      "notes": "Stream cipher mode without authentication. For throughput comparison only."
     },
     {
       "algorithm": "AES-256-GCM",
       "payloadSizeBytes": 1048576,
       "payloadSizeLabel": "1MB",
-      "encryptionsPerSec": 951,
-      "decryptionsPerSec": 1032,
-      "encryptLatencyUs": 1052,
-      "decryptLatencyUs": 969,
-      "throughputMBps": 950.62,
+      "iterations": 300,
+      "encryptionsPerSec": 803,
+      "decryptionsPerSec": 871,
+      "encryptStatsUs": {
+        "mean": 1313,
+        "median": 1245,
+        "stdDev": 264,
+        "p95": 1893
+      },
+      "decryptStatsUs": {
+        "mean": 1236,
+        "median": 1148,
+        "stdDev": 266,
+        "p95": 1860
+      },
+      "throughputMBps": 802.9,
       "authenticationIncluded": true,
-      "notes": "AEAD — recommended (our choice)"
+      "notes": "Authenticated AEAD (GHASH hardware accelerated via CLMUL/AES-NI). Preferred."
     },
     {
-      "algorithm": "AES-256-CBC+HMAC",
+      "algorithm": "AES-256-CBC + HMAC-SHA256",
       "payloadSizeBytes": 1048576,
       "payloadSizeLabel": "1MB",
-      "encryptionsPerSec": 460,
-      "decryptionsPerSec": 652,
-      "encryptLatencyUs": 2174,
-      "decryptLatencyUs": 1533,
-      "throughputMBps": 459.94,
+      "iterations": 300,
+      "encryptionsPerSec": 424,
+      "decryptionsPerSec": 604,
+      "encryptStatsUs": {
+        "mean": 2435,
+        "median": 2358,
+        "stdDev": 594,
+        "p95": 3023
+      },
+      "decryptStatsUs": {
+        "mean": 1728,
+        "median": 1655,
+        "stdDev": 328,
+        "p95": 2241
+      },
+      "throughputMBps": 424.1,
       "authenticationIncluded": true,
-      "notes": "Encrypt-then-MAC (legacy)"
+      "notes": "Encrypt-then-MAC composite. Requires two independent cryptographic passes."
     },
     {
-      "algorithm": "AES-256-CTR (no auth)",
+      "algorithm": "AES-256-CTR",
       "payloadSizeBytes": 1048576,
       "payloadSizeLabel": "1MB",
-      "encryptionsPerSec": 1024,
-      "decryptionsPerSec": 1045,
-      "encryptLatencyUs": 977,
-      "decryptLatencyUs": 957,
-      "throughputMBps": 1023.94,
+      "iterations": 300,
+      "encryptionsPerSec": 929,
+      "decryptionsPerSec": 972,
+      "encryptStatsUs": {
+        "mean": 1123,
+        "median": 1076,
+        "stdDev": 208,
+        "p95": 1534
+      },
+      "decryptStatsUs": {
+        "mean": 1085,
+        "median": 1028,
+        "stdDev": 206,
+        "p95": 1488
+      },
+      "throughputMBps": 929.1,
       "authenticationIncluded": false,
-      "notes": "Stream, no authentication"
+      "notes": "Stream cipher mode without authentication. For throughput comparison only."
     }
   ]
 }

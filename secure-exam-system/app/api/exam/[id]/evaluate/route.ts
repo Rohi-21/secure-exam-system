@@ -21,6 +21,8 @@ import { envelopeDecrypt, envelopeEncrypt } from "@/lib/crypto/envelope";
 import { sha256Hex } from "@/lib/crypto/hash";
 import { ed25519Sign } from "@/lib/crypto/ed25519";
 import { examKEKCache } from "../questions/route";
+import { sessionStore } from "@/lib/store/session-store";
+import { appendAuditLog, AuditEventType } from "@/lib/audit/chain";
 import type { EncryptionAAD } from "@/lib/crypto/aes";
 
 interface GradedResult {
@@ -57,18 +59,27 @@ export async function POST(
     }
 
     // ── Get cached ExamKEK ────────────────────────────────────────────
-    const examKEK = examKEKCache.get(examId);
+    const examKEK = sessionStore.getExamKEK(examId) ?? examKEKCache.get(examId);
     if (!examKEK) {
       return NextResponse.json(
-        { error: "ExamKEK not in cache. Run /api/keys/reconstruct or /api/keys/cache-kek first." },
+        { error: "ExamKEK not in memory. Run /api/keys/trustee-approve or /api/keys/reconstruct first." },
         { status: 503 }
       );
     }
 
-    // ── Decrypt answer key ────────────────────────────────────────────
+    // ── Decrypt answer key & Verify Commitment was Revealed ───────────
     const answerKeyRecord = await prisma.answerKey.findUnique({ where: { examId } });
     if (!answerKeyRecord) {
       return NextResponse.json({ error: "Answer key not found" }, { status: 404 });
+    }
+
+    if (!answerKeyRecord.revealedAt || !answerKeyRecord.commitmentSalt) {
+      return NextResponse.json(
+        {
+          error: "Evaluation prohibited: Answer key commitment has not been revealed yet. The examiner must reveal the answer key commitment salt before automated evaluation can proceed.",
+        },
+        { status: 400 }
+      );
     }
 
     const answerKeyAAD: EncryptionAAD = {
@@ -202,7 +213,23 @@ export async function POST(
     }));
 
     // ── Update exam status ────────────────────────────────────────────
-    await prisma.exam.update({ where: { id: examId }, data: { status: "revealed" } });
+    await prisma.exam.update({ where: { id: examId }, data: { status: "evaluated" } });
+
+    // Append tamper-evident audit log
+    await appendAuditLog(
+      AuditEventType.EVALUATION_COMPLETED,
+      actorId,
+      examId,
+      {
+        gradedCount: resultUpserts.length,
+        evaluatedBy: actorId,
+        averageScore: gradedResults.length
+          ? Math.round(gradedResults.reduce((acc, r) => acc + r.score, 0) / gradedResults.length)
+          : 0,
+      },
+      auditPrivKey,
+      req.headers.get("x-forwarded-for") ?? undefined
+    ).catch(() => {});
 
     return NextResponse.json({
       message: `Evaluated ${resultUpserts.length} submissions.`,

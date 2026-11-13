@@ -33,14 +33,29 @@ export function ed25519Sign(privateKeyPem: string, data: Buffer): string {
   return cryptoSign(null, data, privateKey).toString("base64");
 }
 
+/** Helper to parse a public key whether it is PEM or raw Base64 SPKI */
+export function importEd25519PublicKey(keyInput: string) {
+  const trimmed = keyInput.trim();
+  if (trimmed.startsWith("-----BEGIN")) {
+    return createPublicKey(trimmed);
+  }
+  // Try importing as DER SPKI from Base64
+  const der = Buffer.from(trimmed, "base64");
+  return createPublicKey({
+    key: der,
+    format: "der",
+    type: "spki",
+  });
+}
+
 /** Verify an Ed25519 signature */
 export function ed25519Verify(
-  publicKeyPem: string,
+  publicKeyInput: string,
   data: Buffer,
   signatureB64: string
 ): boolean {
   try {
-    const publicKey = createPublicKey(publicKeyPem);
+    const publicKey = importEd25519PublicKey(publicKeyInput);
     return cryptoVerify(null, data, publicKey, Buffer.from(signatureB64, "base64"));
   } catch {
     return false;
@@ -63,16 +78,26 @@ export function generateSessionChallenge(): {
 
 /**
  * Build the signed payload for the ECDH handshake.
- * Server signs this with its long-term Ed25519 key.
- * Browser verifies before computing shared secret.
+ * Binds both client and server ephemeral public keys, identities, session, and nonce.
+ * Uses deterministic key ordering.
  */
 export function buildHandshakePayload(params: {
   serverEphemeralPubKeyB64: string;
+  clientEphemeralPubKeyB64: string;
   examId: string;
   sessionId: string;
   nonce: string;
   timestamp: number;
   studentId: string;
 }): Buffer {
-  return Buffer.from(JSON.stringify(params), "utf-8");
+  const sorted = {
+    clientEphemeralPubKeyB64: params.clientEphemeralPubKeyB64,
+    examId: params.examId,
+    nonce: params.nonce,
+    sessionId: params.sessionId,
+    serverEphemeralPubKeyB64: params.serverEphemeralPubKeyB64,
+    studentId: params.studentId,
+    timestamp: params.timestamp,
+  };
+  return Buffer.from(JSON.stringify(sorted), "utf-8");
 }

@@ -39,23 +39,57 @@ export function ecdsaSign(privateKeyPem: string, data: Buffer): string {
   return signer.sign(privateKey, "base64");
 }
 
+/** Helper to import ECDSA public key whether PEM or raw Base64 SPKI */
+export function importECDSAPublicKey(keyInput: string) {
+  const trimmed = keyInput.trim();
+  if (trimmed.startsWith("-----BEGIN")) {
+    return createPublicKey(trimmed);
+  }
+  const der = Buffer.from(trimmed, "base64");
+  return createPublicKey({
+    key: der,
+    format: "der",
+    type: "spki",
+  });
+}
+
 /**
  * Verify an ECDSA-P256 signature.
- * @param publicKeyPem  Student or examiner's ECDSA public key (PEM)
- * @param data          Original data that was signed
- * @param signatureB64  base64 signature
+ * Supports both standard ASN.1 DER encoding and WebCrypto IEEE P1363 (r || s, 64-byte) encoding.
+ *
+ * @param publicKeyInput Student or examiner's ECDSA public key (PEM or SPKI Base64)
+ * @param data           Original data that was signed
+ * @param signatureB64   base64 signature
  * @returns true if signature is valid
  */
 export function ecdsaVerify(
-  publicKeyPem: string,
+  publicKeyInput: string,
   data: Buffer,
   signatureB64: string
 ): boolean {
   try {
+    const publicKey = importECDSAPublicKey(publicKeyInput);
+    const sigBuf = Buffer.from(signatureB64, "base64");
+
+    // 1. Try IEEE P1363 (standard WebCrypto output format: exactly 64 bytes for P-256)
+    if (sigBuf.length === 64) {
+      try {
+        const verifier = createVerify("SHA256");
+        verifier.update(data);
+        const valid = verifier.verify(
+          { key: publicKey, dsaEncoding: "ieee-p1363" },
+          sigBuf
+        );
+        if (valid) return true;
+      } catch {
+        // Fall through to try DER
+      }
+    }
+
+    // 2. Try ASN.1 DER (standard Node.js crypto output)
     const verifier = createVerify("SHA256");
     verifier.update(data);
-    const publicKey = createPublicKey(publicKeyPem);
-    return verifier.verify(publicKey, Buffer.from(signatureB64, "base64"));
+    return verifier.verify(publicKey, sigBuf);
   } catch {
     return false;
   }

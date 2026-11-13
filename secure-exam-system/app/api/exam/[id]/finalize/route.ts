@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { buildMerkleTree, generateMerkleProof } from "@/lib/crypto/merkle";
+import { appendAuditLog, AuditEventType } from "@/lib/audit/chain";
 
 export async function POST(
   req: NextRequest,
@@ -56,14 +57,38 @@ export async function POST(
 
     await prisma.$transaction(updateOps);
 
-    // Store Merkle root on each result too
+    // Store Merkle root on each result and release results to candidates
     await prisma.result.updateMany({
       where: { examId },
-      data: { merkleRoot },
+      data: {
+        merkleRoot,
+        releasedAt: new Date(),
+      },
     });
 
+    // Mark exam as finalized
+    await prisma.exam.update({
+      where: { id: examId },
+      data: { status: "finalized" },
+    });
+
+    // Append tamper-evident audit log
+    const auditPrivKey = process.env.AUDIT_ED25519_PRIVATE_KEY_PEM ?? "";
+    await appendAuditLog(
+      AuditEventType.RESULT_FINALIZED,
+      req.headers.get("x-user-id") ?? undefined,
+      examId,
+      {
+        merkleRoot,
+        submissionCount: submissions.length,
+        leavesSummary: leafHashes.slice(0, 3),
+      },
+      auditPrivKey,
+      req.headers.get("x-forwarded-for") ?? undefined
+    ).catch(() => {});
+
     return NextResponse.json({
-      message: "Merkle tree built. Inclusion proofs stored for all submissions.",
+      message: "Merkle tree built. Inclusion proofs stored and results released for all submissions.",
       merkleRoot,
       submissionCount: submissions.length,
       leafHashes: leafHashes.slice(0, 5), // Preview first 5

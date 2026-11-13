@@ -13,6 +13,7 @@ import { generateRSAKeyPair } from "../lib/crypto/rsa";
 import { generateEd25519KeyPair } from "../lib/crypto/ed25519";
 import { generateECDSAKeyPair } from "../lib/crypto/ecdsa";
 import { argon2idHash } from "../lib/crypto/kdf";
+import { encryptTOTPSecret } from "../lib/auth/totp";
 import { config } from "dotenv";
 import path from "path";
 
@@ -21,9 +22,12 @@ config({ path: path.resolve(".env.local") });
 const prisma = new PrismaClient();
 
 const DEMO_PASSWORD = "DemoPassword@CNS2024!";
+const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXP"; // Base32 TOTP secret for authenticator apps
 
 async function main() {
   console.log("\n🌱 Seeding database...\n");
+
+  const encryptedTotp = encryptTOTPSecret(DEMO_TOTP_SECRET);
 
   // ── 1. Admin ─────────────────────────────────────────────────────────────
   const { publicKeyPem: adminEd25519Pub } = generateEd25519KeyPair();
@@ -31,14 +35,16 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { usn: "ADMIN001" },
-    update: {},
+    update: {
+      totpSecret: encryptedTotp,
+    },
     create: {
       usn: "ADMIN001",
       email: "admin@kletech.ac.in",
       name: "System Administrator",
       role: "admin",
       passwordHash: await argon2idHash(DEMO_PASSWORD),
-      totpSecret: JSON.stringify({ c: "placeholder", t: "placeholder", i: "placeholder" }),
+      totpSecret: encryptedTotp,
       ed25519PubKey: adminEd25519Pub,
       ecdsaPubKey:   adminEcdsaPub,
     },
@@ -59,7 +65,7 @@ async function main() {
       name: "Dr. Roopa Badami",
       role: "examiner",
       passwordHash: await argon2idHash(DEMO_PASSWORD),
-      totpSecret: JSON.stringify({ c: "placeholder", t: "placeholder", i: "placeholder" }),
+      totpSecret: encryptedTotp,
       ed25519PubKey: examEd25519Pub,
       ecdsaPubKey:   examEcdsaPub,
     },
@@ -88,12 +94,12 @@ async function main() {
     const { publicKeyPem: ecdsaPub   } = generateECDSAKeyPair();
     const student = await prisma.user.upsert({
       where: { usn: s.usn },
-      update: {},
+      update: { totpSecret: encryptedTotp },
       create: {
         usn: s.usn, email: s.email, name: s.name,
         role: "student",
         passwordHash: await argon2idHash(DEMO_PASSWORD),
-        totpSecret: JSON.stringify({ c: "placeholder", t: "placeholder", i: "placeholder" }),
+        totpSecret: encryptedTotp,
         ed25519PubKey: ed25519Pub,
         ecdsaPubKey:   ecdsaPub,
       },

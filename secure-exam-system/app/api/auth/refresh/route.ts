@@ -60,6 +60,13 @@ export async function POST(req: NextRequest) {
     });
 
     const response = NextResponse.json({ accessToken });
+    response.cookies.set("auth_token", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60,
+    });
     response.cookies.set(COOKIE_NAME, newRawToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
