@@ -397,157 +397,352 @@ export default function StudentExamPage() {
 
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
+  const answeredCount = Object.keys(answers).length;
+  const totalCount = questions.length;
+  const progressPct = totalCount ? (answeredCount / totalCount) * 100 : 0;
+  const timerColor =
+    timeLeft < 300 ? "text-red-400" : timeLeft < 600 ? "text-amber-400" : "text-emerald-400";
+  const timerBg =
+    timeLeft < 300 ? "bg-red-500/10 border-red-500/30" : timeLeft < 600 ? "bg-amber-500/10 border-amber-500/30" : "bg-emerald-500/10 border-emerald-500/30";
 
+  const [showConfirm, setShowConfirm] = (useState as typeof useState<boolean>)(false);
+  const [currentQ, setCurrentQ] = (useState as typeof useState<number>)(1);
+
+  // ── Handshake Loading ──────────────────────────────────────────────────────
   if (phase === "handshake") {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-center max-w-md p-8 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl">
-          <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white font-medium text-lg">{status}</p>
-          <p className="text-gray-500 text-xs mt-2">
-            ECDH-P256 Key Exchange · Server Ed25519 Authentication · HKDF Session Derivation
-          </p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
+          <div className="relative mx-auto w-14 h-14 mb-5">
+            <div className="absolute inset-0 rounded-full border-2 border-slate-700" />
+            <div className="absolute inset-0 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center text-blue-400 text-xl">🔐</div>
+          </div>
+          <h2 className="text-white font-bold text-lg mb-1">Securing Session</h2>
+          <p className="text-slate-400 text-sm mb-5">{status}</p>
+          <div className="space-y-1.5 text-left">
+            {[
+              "ECDH-P256 Ephemeral Key Exchange",
+              "Ed25519 Server Authentication",
+              "HKDF-SHA256 Session Key Derivation",
+              "AES-256-GCM Exam Delivery",
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
+                {step}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
+  // ── Submitted State ────────────────────────────────────────────────────────
   if (phase === "submitted") {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-        <div className="text-center max-w-md p-8 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 mb-4">
-            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 mb-5">
+            <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <h2 className="text-white text-2xl font-bold mb-2">Submission Confirmed</h2>
-          <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-            Your answers were canonicalized, cryptographically signed with your non-exportable ECDSA key,
-            encrypted under the negotiated session key, and recorded in the tamper-evident audit log.
+          <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+            Your answers were canonicalized (RFC 8785), signed with your non-exportable ECDSA-P256
+            key, encrypted under the ECDH-negotiated session key, and recorded in the
+            tamper-evident audit log.
           </p>
+          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6 text-left space-y-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Submission Receipt</p>
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-500">Answers answered</span>
+              <span className="text-white font-mono">{answeredCount} / {totalCount}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-500">Session</span>
+              <span className="text-slate-300 font-mono text-[10px]">{sessionId.slice(0, 20)}…</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500">Cryptographic signature</span>
+              <span className="inline-flex items-center gap-1 text-emerald-400">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                ECDSA-P256
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500">Encryption</span>
+              <span className="inline-flex items-center gap-1 text-emerald-400">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                AES-256-GCM
+              </span>
+            </div>
+          </div>
           <button
             onClick={() => router.push(`/results/${examId}`)}
-            className="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+            className="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition-colors"
           >
-            Go to Results
+            View Result &amp; Merkle Proof →
           </button>
         </div>
       </div>
     );
   }
 
+  // ── Error State ────────────────────────────────────────────────────────────
   if (phase === "error") {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-        <div className="text-center max-w-md p-8 bg-gray-900 border border-red-500/30 rounded-2xl shadow-2xl">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/20 mb-4">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-red-500/20 rounded-2xl p-8 shadow-2xl text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 mb-5">
             <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
             </svg>
           </div>
-          <h2 className="text-red-400 text-xl font-bold mb-2">Examination Error</h2>
-          <p className="text-gray-400 text-sm mb-6">{error}</p>
+          <h2 className="text-red-400 text-xl font-bold mb-2">Session Error</h2>
+          <p className="text-slate-400 text-sm mb-6 font-mono text-xs bg-slate-800 p-3 rounded-lg">{error}</p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
+            className="w-full px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
-            Return to Dashboard
+            ← Return to Dashboard
           </button>
         </div>
       </div>
     );
   }
 
+  // ── Active Exam UI ─────────────────────────────────────────────────────────
+  const activeQuestion = questions.find((q) => q.questionNo === currentQ) ?? questions[0];
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Fixed Navigation Header */}
-      <div className="fixed top-0 inset-x-0 z-50 bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
-        <div>
-          <span className="text-white font-bold text-base">CNS Secure Examination</span>
-          <span className="hidden sm:inline-block ml-3 text-xs text-gray-400">
-            Session encrypted · ECDSA signed · Autosaved
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <span className="text-xs text-gray-400 block sm:inline mr-2">Time Remaining:</span>
-            <span
-              className={`font-mono font-bold text-lg ${
-                timeLeft < 300 ? "text-red-400 animate-pulse" : "text-white"
-              }`}
-            >
-              {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
-            </span>
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+
+      {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
+      <header className="fixed top-0 inset-x-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-slate-400 text-lg">🛡️</span>
+          <div className="min-w-0">
+            <span className="text-white font-semibold text-sm block truncate">Secure Examination</span>
+            <span className="text-slate-500 text-[10px] font-mono truncate hidden sm:block">Session · ECDH-P256 · AES-256-GCM</span>
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={phase === "submitting"}
-            className="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-lg shadow-green-600/20"
-          >
-            {phase === "submitting" ? "Submitting…" : "Submit Exam"}
+        </div>
+
+        {/* Timer */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono text-sm font-bold ${timerBg} ${timerColor}`}>
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+        </div>
+
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={phase === "submitting"}
+          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+        >
+          {phase === "submitting" ? "Submitting…" : "Submit Exam"}
+        </button>
+      </header>
+
+      {/* ── Security Status Strip ───────────────────────────────────────────── */}
+      {sessionEncKeyRef.current && (
+        <div className="fixed top-14 inset-x-0 z-40 bg-emerald-950/40 border-b border-emerald-900/40 px-4 py-1.5 flex items-center gap-4 overflow-x-auto">
+          {[
+            "🔐 AES-256-GCM Session Active",
+            "✓ ECDH-P256 Key Established",
+            "✓ Ed25519 Server Authenticated",
+            "📝 ECDSA-P256 Signing Ready",
+          ].map((badge) => (
+            <span key={badge} className="text-emerald-400 text-[10px] font-mono whitespace-nowrap">{badge}</span>
+          ))}
+        </div>
+      )}
+
+      {/* ── Main Layout ─────────────────────────────────────────────────────── */}
+      <div className={`flex flex-1 ${sessionEncKeyRef.current ? "pt-20" : "pt-14"}`}>
+
+        {/* ── Question Navigator Sidebar ──────────────────────────────────── */}
+        <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 border-r border-slate-800 bg-slate-900/50 p-4 sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Questions</p>
+          <div className="grid grid-cols-5 gap-1.5 mb-4">
+            {questions.map((q) => {
+              const isAnswered = !!answers[q.questionNo];
+              const isCurrent = currentQ === q.questionNo;
+              return (
+                <button
+                  key={q.questionNo}
+                  onClick={() => setCurrentQ(q.questionNo)}
+                  className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                    isCurrent
+                      ? "bg-blue-600 text-white"
+                      : isAnswered
+                      ? "bg-emerald-600/30 text-emerald-400 border border-emerald-600/30"
+                      : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                  }`}
+                >
+                  {q.questionNo}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="space-y-1.5 text-xs text-slate-500 mt-auto">
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-blue-600 inline-block" />Current</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-emerald-600/30 border border-emerald-600/30 inline-block" />Answered</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-slate-800 inline-block" />Unanswered</div>
+          </div>
+
+          {/* Progress */}
+          <div className="mt-4 pt-4 border-t border-slate-800">
+            <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+              <span>Progress</span>
+              <span className="font-mono">{answeredCount}/{totalCount}</span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Question Panel ──────────────────────────────────────────────── */}
+        <main className="flex-1 max-w-2xl mx-auto px-4 sm:px-6 py-6">
+          {!activeQuestion ? (
+            <div className="text-center text-slate-500 py-20">No questions loaded for this examination.</div>
+          ) : (
+            <div className="space-y-5">
+              {/* Question header */}
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-2 text-xs text-slate-400 font-mono">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{activeQuestion.questionNo}</span>
+                  Question {activeQuestion.questionNo} of {totalCount}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {answeredCount} answered · {totalCount - answeredCount} remaining
+                </span>
+              </div>
+
+              {/* Question text */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
+                <p className="text-white text-base leading-relaxed font-medium mb-6">
+                  {activeQuestion.text}
+                </p>
+
+                {/* Options */}
+                <div className="space-y-2.5">
+                  {(["A", "B", "C", "D"] as const).map((opt) => {
+                    const optText = activeQuestion[`option${opt}` as keyof Question] as string;
+                    const selected = answers[activeQuestion.questionNo] === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => handleAnswerSelect(activeQuestion.questionNo, opt)}
+                        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-sm transition-all ${
+                          selected
+                            ? "bg-blue-600/15 border-2 border-blue-500 text-white"
+                            : "bg-slate-800/50 border border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-800"
+                        }`}
+                      >
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                          selected ? "bg-blue-500 text-white" : "bg-slate-700 text-slate-300"
+                        }`}>
+                          {opt}
+                        </span>
+                        <span className="flex-1">{optText}</span>
+                        {selected && (
+                          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Navigation buttons */}
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={() => setCurrentQ((n) => Math.max(1, n - 1))}
+                  disabled={currentQ <= 1}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg text-sm transition-colors"
+                >
+                  ← Previous
+                </button>
+                <span className="text-xs text-slate-500 font-mono">
+                  {answers[activeQuestion.questionNo] ? (
+                    <span className="text-emerald-400">✓ Answered · Draft saved</span>
+                  ) : (
+                    <span className="text-slate-500">Not answered</span>
+                  )}
+                </span>
+                <button
+                  onClick={() => setCurrentQ((n) => Math.min(totalCount, n + 1))}
+                  disabled={currentQ >= totalCount}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg text-sm transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* ── Bottom Progress Bar (mobile) ──────────────────────────────────── */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 bg-slate-900/95 border-t border-slate-800 px-4 py-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400 whitespace-nowrap font-mono">{answeredCount}/{totalCount}</span>
+          <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${progressPct}%` }} />
+          </div>
+          <button onClick={() => setShowConfirm(true)} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors">
+            Submit
           </button>
         </div>
       </div>
 
-      {/* Questions list */}
-      <div className="max-w-3xl mx-auto pt-24 pb-28 px-4 space-y-6">
-        {questions.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No questions loaded for this examination.</div>
-        ) : (
-          questions.map((q) => (
-            <div key={q.questionNo} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md">
-              <p className="text-white text-base font-medium mb-4 leading-relaxed">
-                <span className="text-blue-400 font-bold mr-2">Q{q.questionNo}.</span>
-                {q.text}
-              </p>
-              <div className="grid grid-cols-1 gap-2.5">
-                {(["A", "B", "C", "D"] as const).map((opt) => {
-                  const optText = q[`option${opt}` as keyof Question] as string;
-                  const selected = answers[q.questionNo] === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => handleAnswerSelect(q.questionNo, opt)}
-                      className={`flex items-center gap-3.5 p-3.5 rounded-xl text-left text-sm transition-all ${
-                        selected
-                          ? "bg-blue-600/20 border-2 border-blue-500 text-white font-medium"
-                          : "bg-gray-800/60 border border-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-800"
-                      }`}
-                    >
-                      <span
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors ${
-                          selected ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-300"
-                        }`}
-                      >
-                        {opt}
-                      </span>
-                      <span className="flex-1">{optText}</span>
-                    </button>
-                  );
-                })}
-              </div>
+      {/* ── Confirmation Modal ────────────────────────────────────────────── */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-white font-bold text-lg mb-1">Confirm Submission</h3>
+            <p className="text-slate-400 text-sm mb-5">
+              You have answered <strong className="text-white">{answeredCount}</strong> of{" "}
+              <strong className="text-white">{totalCount}</strong> questions.
+              {totalCount - answeredCount > 0 && (
+                <span className="text-amber-400"> {totalCount - answeredCount} question(s) are unanswered.</span>
+              )}
+            </p>
+            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 mb-5 space-y-1.5 text-xs">
+              <p className="text-slate-400">On submission your answers will be:</p>
+              <p className="text-slate-300">· Canonicalized (RFC 8785) + SHA-256 hashed</p>
+              <p className="text-slate-300">· Signed with your ECDSA-P256 key</p>
+              <p className="text-slate-300">· Encrypted with AES-256-GCM session key</p>
+              <p className="text-slate-300">· Recorded in the tamper-evident audit log</p>
             </div>
-          ))
-        )}
-      </div>
-
-      {/* Bottom Progress Bar */}
-      <div className="fixed bottom-0 inset-x-0 bg-gray-900 border-t border-gray-800 px-6 py-3">
-        <div className="max-w-3xl mx-auto flex items-center gap-4">
-          <span className="text-xs text-gray-400 whitespace-nowrap">
-            {Object.keys(answers).length} of {questions.length} answered
-          </span>
-          <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{
-                width: `${questions.length ? (Object.keys(answers).length / questions.length) * 100 : 0}%`,
-              }}
-            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowConfirm(false); handleSubmit(); }}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                Confirm & Submit
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

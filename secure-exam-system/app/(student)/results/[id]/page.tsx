@@ -168,179 +168,196 @@ export default function StudentResultsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Decrypting and verifying examination results…</p>
+          <p className="text-slate-400 text-sm">Decrypting and verifying results…</p>
         </div>
       </div>
     );
   }
 
+  const scoreColor =
+    result && result.score >= 75 ? "text-emerald-400" :
+    result && result.score >= 50 ? "text-amber-400" : "text-red-400";
+  const scoreBg =
+    result && result.score >= 75 ? "bg-emerald-500/10 border-emerald-500/20" :
+    result && result.score >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+  const scoreLabel =
+    result && result.score >= 75 ? "Excellent" :
+    result && result.score >= 50 ? "Passed" : "Needs Improvement";
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6 sm:p-10">
-      <div className="max-w-3xl mx-auto space-y-8">
-        {/* Top Header */}
-        <div className="flex items-center justify-between pb-6 border-b border-gray-800">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Link href="/dashboard" className="text-gray-400 hover:text-gray-300 text-sm">
-                ← Return to Dashboard
-              </Link>
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Examination Results</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              Exam ID: <code className="text-blue-400 font-mono text-xs">{examId}</code>
-            </p>
-          </div>
-          <button
-            onClick={fetchResult}
-            className="px-4 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 rounded-lg text-xs transition"
-          >
+    <div className="min-h-screen bg-slate-950 text-white">
+      {/* Header */}
+      <header className="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-10 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link href="/results" className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            All Results
+          </Link>
+          <span className="text-xs font-mono text-slate-500">Exam {examId.slice(0, 8)}…</span>
+          <button onClick={fetchResult} className="text-xs text-slate-400 hover:text-white px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors">
             Re-verify
           </button>
         </div>
+      </header>
 
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm leading-relaxed">
-            <span className="font-semibold block mb-1">Results Retrieval Notice:</span>
-            {error}
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
+            <p className="font-semibold mb-1">Notice</p>
+            <p className="text-xs leading-relaxed">{error}</p>
           </div>
         )}
 
         {result && (
-          <div className="space-y-6">
-            {/* Score Summary Card */}
-            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-8 text-center shadow-xl space-y-3">
-              <span
-                className={`inline-block px-3.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase font-mono ${
-                  result.score >= 50
-                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                    : "bg-red-500/20 text-red-400 border border-red-500/30"
-                }`}
-              >
-                {result.score >= 50 ? "Passed" : "Needs Improvement"}
+          <>
+            {/* ── Score Card ───────────────────────────────────────────────── */}
+            <div className={`rounded-2xl border p-8 text-center ${scoreBg}`}>
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-4 ${scoreBg} ${scoreColor} border`}>
+                {scoreLabel}
               </span>
-
-              <div
-                className={`text-6xl sm:text-7xl font-black tracking-tight ${
-                  result.score >= 50 ? "text-green-400" : "text-red-400"
-                }`}
-              >
+              <div className={`text-7xl font-black tracking-tight mb-3 ${scoreColor}`}>
                 {result.score}%
               </div>
-
-              <p className="text-gray-400 text-sm">
-                <strong className="text-white">{result.correct}</strong> correct out of{" "}
-                <strong className="text-white">{result.totalQuestions}</strong> questions (
-                {result.incorrect} incorrect)
-              </p>
+              <div className="flex items-center justify-center gap-6 text-sm">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-400">{result.correct}</p>
+                  <p className="text-slate-400 text-xs">Correct</p>
+                </div>
+                <div className="w-px h-10 bg-slate-700" />
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-400">{result.incorrect}</p>
+                  <p className="text-slate-400 text-xs">Incorrect</p>
+                </div>
+                <div className="w-px h-10 bg-slate-700" />
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-white">{result.totalQuestions}</p>
+                  <p className="text-slate-400 text-xs">Total</p>
+                </div>
+              </div>
             </div>
 
-            {/* Cryptographic Proof & Batch Integrity Panel */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4 shadow-lg">
-              <h2 className="text-base font-bold text-white border-b border-gray-800 pb-2">
-                Cryptographic Non-Repudiation & Batch Proofs
-              </h2>
-
-              {/* Merkle Proof Verification */}
-              <div className="p-4 bg-gray-800/50 border border-gray-700/60 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-300">
-                    Merkle Tree Inclusion Proof (RFC 6962):
-                  </span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
-                      merkleVerified === true
-                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                        : merkleVerified === false
-                        ? "bg-red-500/20 text-red-400"
-                        : "bg-gray-700 text-gray-400"
-                    }`}
-                  >
-                    {merkleVerified === true ? "MATHEMATICALLY VERIFIED ✓" : "PENDING / UNVERIFIED"}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Browser independently recomputed SHA-256 parent nodes up to the batch root.
-                  Proves your submission was included in the finalized exam batch without omission or modification.
-                </p>
-                {merkleRoot && (
-                  <div className="text-[11px] font-mono text-gray-500 truncate">
-                    Committed Batch Root: <span className="text-purple-400">{merkleRoot}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Digital Signature Verification */}
-              <div className="p-4 bg-gray-800/50 border border-gray-700/60 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-300">
-                    Official Examiner Signature (Ed25519):
-                  </span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded text-xs font-bold font-mono ${
-                      sigValid
-                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                        : "bg-yellow-500/20 text-yellow-400"
-                    }`}
-                  >
-                    {sigValid ? "VALID SIGNATURE ✓" : "ATTESTATION RECORDED"}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  The result digest is digitally signed with the authorized institution audit key,
-                  guaranteeing authentic evaluation.
-                </p>
+            {/* ── Cryptographic Verification ───────────────────────────────── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
+                <span className="text-lg">🔐</span>
+                <h2 className="text-base font-bold text-white">Cryptographic Verification</h2>
               </div>
 
               {/* Submission Digest */}
               {contentHash && (
-                <div className="p-4 bg-gray-800/50 border border-gray-700/60 rounded-xl space-y-1">
-                  <span className="text-xs font-semibold text-gray-300 block">
-                    Your Canonical Submission Digest (SHA-256):
-                  </span>
-                  <code className="text-xs font-mono text-blue-300 break-all block select-all">
+                <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-300">Submission Digest (SHA-256)</span>
+                    <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      Verified
+                    </span>
+                  </div>
+                  <code className="text-[11px] font-mono text-blue-300 break-all block select-all leading-relaxed">
                     {contentHash}
                   </code>
+                  <p className="text-[10px] text-slate-500">SHA-256 of your RFC 8785-canonicalized answers</p>
                 </div>
               )}
+
+              {/* Merkle Proof */}
+              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">Merkle Inclusion Proof</span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded border ${
+                    merkleVerified === true
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+                      : merkleVerified === false
+                      ? "bg-red-500/15 text-red-400 border-red-500/20"
+                      : "bg-slate-700 text-slate-400 border-slate-600"
+                  }`}>
+                    {merkleVerified === true ? (
+                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Verified in Browser</>
+                    ) : merkleVerified === false ? "✗ Failed" : "Pending"}
+                  </span>
+                </div>
+                {merkleRoot && (
+                  <div className="text-[10px] font-mono text-slate-500 break-all">
+                    Batch Root: <span className="text-purple-400">{merkleRoot.slice(0, 32)}…</span>
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-500">
+                  Your submission is mathematically bound into the finalized result batch
+                </p>
+              </div>
+
+              {/* Server Attestation */}
+              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">Server Attestation (Ed25519)</span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded border ${
+                    sigValid
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/15 text-amber-400 border-amber-500/20"
+                  }`}>
+                    {sigValid ? (
+                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Signed by Exam Server</>
+                    ) : "Recorded"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Result digest signed with the institution Ed25519 key — guarantees authentic evaluation
+                </p>
+              </div>
+
+              {/* ECDSA Submission Signature */}
+              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-300">Your Submission Signature</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                    ECDSA-P256
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Non-repudiable: signed with your non-exportable browser ECDSA key before encryption
+                </p>
+              </div>
             </div>
 
-            {/* Per-Question Answer Breakdown */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4 shadow-lg">
-              <h2 className="text-base font-bold text-white border-b border-gray-800 pb-2">
-                Question Performance Breakdown
+            {/* ── Question Breakdown ───────────────────────────────────────── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <h2 className="text-base font-bold text-white pb-3 border-b border-slate-800">
+                Question Breakdown
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {Object.entries(result.details)
                   .sort(([a], [b]) => Number(a) - Number(b))
                   .map(([qNo, d]) => (
                     <div
                       key={qNo}
-                      className={`p-3.5 rounded-xl border flex items-center justify-between text-xs ${
+                      className={`p-3.5 rounded-xl border flex items-center justify-between ${
                         d.isCorrect
-                          ? "bg-green-500/10 border-green-500/25 text-green-300"
-                          : "bg-red-500/10 border-red-500/25 text-red-300"
+                          ? "bg-emerald-500/8 border-emerald-500/20"
+                          : "bg-red-500/8 border-red-500/20"
                       }`}
                     >
                       <div className="space-y-0.5">
-                        <span className="font-bold text-white">Question #{qNo}</span>
-                        <div className="text-[11px] text-gray-400">
-                          Your Answer: <strong className="text-white">{d.given || "None"}</strong>
+                        <span className="text-xs font-bold text-white">Q{qNo}</span>
+                        <div className="text-[10px] text-slate-400">
+                          Your answer: <strong className="text-white">{d.given || "—"}</strong>
                           {!d.isCorrect && (
-                            <span className="ml-2 text-green-400">
+                            <span className="ml-2 text-emerald-400">
                               Correct: <strong>{d.correct}</strong>
                             </span>
                           )}
                         </div>
                       </div>
-                      <span className="text-base font-bold">{d.isCorrect ? "✓" : "✗"}</span>
+                      <span className={`text-sm font-bold ${d.isCorrect ? "text-emerald-400" : "text-red-400"}`}>
+                        {d.isCorrect ? "✓" : "✗"}
+                      </span>
                     </div>
                   ))}
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
