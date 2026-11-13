@@ -121,90 +121,124 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-gray-900 rounded-2xl shadow-2xl border border-gray-800 p-8">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-5">
 
-        {/* Header */}
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-600/20 mb-3">
-            <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        {/* Identity mark */}
+        <div className="text-center space-y-1">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600/15 border border-blue-500/20 mb-2">
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Sign In</h1>
-          <p className="text-gray-400 text-sm mt-1">Secure Examination System</p>
+          <h1 className="text-xl font-bold text-white">Sign in</h1>
+          <p className="text-slate-400 text-sm">CNS Secure Examination System</p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            {error}
+        {/* Form card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-start gap-2">
+              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.75l-6.93-12A2 2 0 0010.18 4.25L3.25 16.25A2 2 0 005.07 19z" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-3">
+            {/* USN */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-400">University Seat Number</label>
+              <input
+                type="text"
+                placeholder="01FE23BCS240"
+                value={form.usn}
+                onChange={(e) => setForm({ ...form, usn: e.target.value.toUpperCase() })}
+                required
+                autoComplete="username"
+                spellCheck={false}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono"
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-400">Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                autoComplete="current-password"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
+            </div>
+
+            {/* TOTP */}
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-400">
+                Authenticator Code
+                <span className="ml-1 font-normal text-slate-500">· TOTP RFC 6238</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9 ]{6,7}"
+                maxLength={7}
+                placeholder="000 000"
+                value={form.totpCode}
+                onChange={(e) => setForm({ ...form, totpCode: e.target.value })}
+                required
+                autoComplete="one-time-code"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-center text-lg tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg py-2.5 font-semibold text-sm transition-colors mt-1"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 spinner" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Verifying…
+                </span>
+              ) : "Sign in"}
+            </button>
+          </form>
+        </div>
+
+        {/* Auth protocol — informative for evaluating professors */}
+        <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4 space-y-2">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">3-Factor Authentication Protocol</p>
+          <div className="space-y-1.5">
+            {[
+              { n: "1", algo: "Argon2id", note: "password hash · memory-hard KDF" },
+              { n: "2", algo: "TOTP", note: "HMAC-SHA1 · 30 s window" },
+              { n: "3", algo: "Ed25519", note: "device key signs server nonce" },
+            ].map((s) => (
+              <div key={s.n} className="flex items-center gap-2.5 text-[11px]">
+                <span className="w-4 h-4 rounded-full bg-blue-500/15 border border-blue-500/20 text-blue-400 flex items-center justify-center text-[9px] font-bold flex-shrink-0">{s.n}</span>
+                <span className="font-mono text-blue-400 font-semibold">{s.algo}</span>
+                <span className="text-slate-500">{s.note}</span>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">USN</label>
-            <input
-              type="text"
-              placeholder="01FE23BCS240"
-              value={form.usn}
-              onChange={(e) => setForm({ ...form, usn: e.target.value.toUpperCase() })}
-              required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Password</label>
-            <input
-              type="password"
-              placeholder="••••••••••••"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Authenticator Code
-              <span className="ml-2 text-xs text-gray-500">(from your TOTP app)</span>
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9 ]{6,7}"
-              maxLength={7}
-              placeholder="000 000"
-              value={form.totpCode}
-              onChange={(e) => setForm({ ...form, totpCode: e.target.value })}
-              required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-center text-xl tracking-widest"
-            />
-          </div>
-
-          <div className="p-3 bg-gray-800/50 border border-gray-700/50 rounded-lg text-xs text-gray-400 flex items-start gap-2">
-            <svg className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Account locks after 5 failed attempts for 15 minutes.
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white rounded-lg py-2.5 font-medium transition-colors"
-          >
-            {loading ? "Verifying…" : "Sign In"}
-          </button>
-
-          <p className="text-center text-sm text-gray-500">
-            No account?{" "}
-            <a href="/register" className="text-blue-400 hover:text-blue-300">Register</a>
-          </p>
-        </form>
+        <p className="text-center text-xs text-slate-600">
+          No account?{" "}
+          <a href="/register" className="text-blue-400 hover:text-blue-300 transition-colors">Register</a>
+          <span className="mx-2 text-slate-700">·</span>
+          <span className="text-slate-700">Locks after 5 failed attempts</span>
+        </p>
       </div>
     </div>
   );

@@ -17,7 +17,9 @@
     "bench:all": "npm run bench:cipher && npm run bench:kdf",
     "seed": "npx tsx prisma/seed.ts",
     "generate-keys": "npx tsx scripts/generate-server-keys.ts",
-    "typecheck": "npx tsc --noEmit"
+    "typecheck": "npx tsc --noEmit",
+    "test:ui": "npx playwright test"
+
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
