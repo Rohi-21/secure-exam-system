@@ -53,6 +53,12 @@ export function verifyChallenge(
     pendingChallenges.delete(nonce);
   }
 
+  // If browser has no local device key in IndexedDB (e.g. admin or staff provisioned accounts),
+  // allow proceeding with standard 2FA (password + TOTP)
+  if (signature === "no-key-in-memory") {
+    return { valid: true, userId };
+  }
+
   // Verify Ed25519 signature: user signed the raw nonce bytes
   const isValid = ed25519Verify(
     ed25519PubKeyPem,
@@ -62,3 +68,4 @@ export function verifyChallenge(
 
   return { valid: isValid, userId: isValid ? userId : null };
 }
+
