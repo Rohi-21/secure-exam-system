@@ -34,8 +34,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing credentials" }, { status: 400 });
     }
 
-    // ── Find user ─────────────────────────────────────────────────────
-    const user = await prisma.user.findUnique({ where: { usn } });
+    // ── Find user (case-insensitive USN matching) ─────────────────────
+    const cleanUsn = usn.trim();
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { usn: cleanUsn },
+          { usn: cleanUsn.toUpperCase() },
+          { usn: cleanUsn.toLowerCase() },
+        ],
+      },
+    });
+
 
     // ── Account lockout check ─────────────────────────────────────────
     if (user?.isLocked && user.lockedUntil && user.lockedUntil > new Date()) {
