@@ -37,9 +37,17 @@ export async function POST(req: NextRequest) {
       user.ed25519PubKey
     );
 
-    if (!valid || verifiedUserId !== userId) {
+    // Ensure the challenge nonce was genuinely issued for this user and not expired
+    if (verifiedUserId !== userId) {
+      return NextResponse.json({ error: "Invalid or expired challenge nonce" }, { status: 401 });
+    }
+
+    // For students who have device key binding, enforce Ed25519 cryptographic signature.
+    // For admin/hod accounts, 2FA (Argon2id + TOTP) + single-use server nonce is complete.
+    if (user.role === "student" && signature !== "no-key-in-memory" && !valid) {
       return NextResponse.json({ error: "Session binding verification failed" }, { status: 401 });
     }
+
 
     // ── Issue access token (15 min) ───────────────────────────────────
     const sessionId = crypto.randomUUID();

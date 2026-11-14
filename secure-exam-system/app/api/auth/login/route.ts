@@ -111,7 +111,13 @@ export async function POST(req: NextRequest) {
 
     const challengeNonce = issueChallenge(user.id);
 
-    return NextResponse.json({ challengeNonce, userId: user.id });
+    return NextResponse.json({
+      challengeNonce,
+      userId: user.id,
+      role: user.role,
+      ed25519PubKey: user.ed25519PubKey,
+    });
+
 
   } catch (err) {
     console.error("[login]", err);

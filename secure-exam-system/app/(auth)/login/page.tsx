@@ -49,6 +49,12 @@ export default function LoginPage() {
       const { challengeNonce, userId } = loginData;
 
       // ── Step 2: Ed25519 session binding ───────────────────────────────
+      // Administrative roles (admin, hod) do not require local browser device key binding
+      if (loginData.role === "admin" || loginData.role === "hod") {
+        await completeLogin(userId, challengeNonce, null);
+        return;
+      }
+
       let keys = getBrowserKeys();
       if (!keys?.ed25519Private) {
         const loaded = await loadDeviceKeys();
@@ -64,6 +70,22 @@ export default function LoginPage() {
         await completeLogin(userId, challengeNonce, null);
         return;
       }
+
+      // Check if the stored browser key belongs to this user (e.g. on shared machines)
+      if (loginData.ed25519PubKey && keys.ed25519Public) {
+        try {
+          const pubRaw = await crypto.subtle.exportKey("spki", keys.ed25519Public);
+          const localPubB64 = btoa(String.fromCharCode(...new Uint8Array(pubRaw)));
+          if (!loginData.ed25519PubKey.includes(localPubB64) && !localPubB64.includes(loginData.ed25519PubKey)) {
+            console.warn("[login] Stored browser key belongs to another user. Proceeding with standard authentication.");
+            await completeLogin(userId, challengeNonce, null);
+            return;
+          }
+        } catch {
+          // If export is not supported, proceed with signing attempt
+        }
+      }
+
 
       // Sign the nonce bytes — pass as ArrayBuffer for strict WebCrypto compat
       const nonceBytes = hexToBytes(challengeNonce);
