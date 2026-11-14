@@ -11,21 +11,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { argon2idHash } from "@/lib/crypto/kdf";
-import { encryptAES256GCM } from "@/lib/crypto/aes";
-import { hkdfDerive } from "@/lib/crypto/kdf";
-import { generateTOTPSecret, generateTOTPUri } from "@/lib/auth/totp";
+import { generateTOTPSecret, generateTOTPUri, encryptTOTPSecret } from "@/lib/auth/totp";
 import { prisma } from "@/lib/db";
 
 const ALLOWED_ROLES = ["student", "examiner", "admin", "hod"] as const;
 
-function getServerTOTPKey(): Buffer {
-  if (process.env.TOTP_ENCRYPTION_KEY) {
-    return Buffer.from(process.env.TOTP_ENCRYPTION_KEY, "hex");
-  }
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET or TOTP_ENCRYPTION_KEY not set");
-  return hkdfDerive(Buffer.from(secret, "utf-8"), null, "totp-secret-encryption-key", 32);
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,25 +52,9 @@ export async function POST(req: NextRequest) {
     const passwordHash = await argon2idHash(password);
 
     // ── TOTP secret generation + server-side encryption ────────────────
-    const { secretBase32, secretHex } = generateTOTPSecret();
-    const totpKey = getServerTOTPKey();
-    const encryptedTOTP = encryptAES256GCM(
-      totpKey,
-      Buffer.from(secretBase32, "utf-8"),
-      {
-        record_id: `totp-${usn}`,
-        record_type: "totp_secret",
-        key_version: 1,
-        algorithm: "AES-256-GCM",
-      }
-    );
+    const { secretBase32 } = generateTOTPSecret();
+    const totpStorageJson = encryptTOTPSecret(secretBase32, usn);
 
-    // Store as compact JSON — ciphertext|authTag|iv (all base64)
-    const totpStorageJson = JSON.stringify({
-      c: encryptedTOTP.ciphertext,
-      t: encryptedTOTP.authTag,
-      i: encryptedTOTP.iv,
-    });
 
     // ── Create user record ──────────────────────────────────────────────
     const user = await prisma.user.create({

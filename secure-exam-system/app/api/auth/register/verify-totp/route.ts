@@ -8,14 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { decryptAES256GCM } from "@/lib/crypto/aes";
-import { hkdfDerive } from "@/lib/crypto/kdf";
-import { verifyTOTP } from "@/lib/auth/totp";
-
-function getServerTOTPKey(): Buffer {
-  const secret = process.env.JWT_SECRET!;
-  return hkdfDerive(Buffer.from(secret, "utf-8"), null, "totp-secret-encryption-key", 32);
-}
+import { verifyTOTP, decryptTOTPSecret } from "@/lib/auth/totp";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,24 +23,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Decrypt TOTP secret
-    const stored = JSON.parse(user.totpSecret);
-    const totpKey = getServerTOTPKey();
-    const aad = {
-      record_id: `totp-${user.usn}`,
-      record_type: "totp_secret" as const,
-      key_version: 1,
-      algorithm: "AES-256-GCM" as const,
-    };
-    const secretBase32Buf = decryptAES256GCM(totpKey, {
-      ciphertext: stored.c,
-      authTag: stored.t,
-      iv: stored.i,
-      aad: JSON.stringify(aad),
-      algorithm: "AES-256-GCM",
-    }, aad);
-
-    const secretBase32 = secretBase32Buf.toString("utf-8");
+    // Decrypt TOTP secret using shared authoritative helper
+    let secretBase32: string;
+    try {
+      secretBase32 = decryptTOTPSecret(user.totpSecret, user.usn);
+    } catch (decErr) {
+      console.error("[verify-totp] Decryption failed:", decErr);
+      return NextResponse.json({ error: "Server error: unable to decrypt TOTP secret" }, { status: 500 });
+    }
 
     if (!verifyTOTP(secretBase32, totpCode)) {
       return NextResponse.json({ error: "Invalid TOTP code. Check your authenticator app." }, { status: 400 });
@@ -60,3 +43,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "TOTP verification failed" }, { status: 500 });
   }
 }
+

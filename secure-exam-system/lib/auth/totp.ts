@@ -108,15 +108,15 @@ export function generateCurrentToken(secretBase32: string): string {
 }
 
 import { encryptAES256GCM, decryptAES256GCM } from "../crypto/aes";
-import { createHash } from "crypto";
+import { hkdfDerive } from "../crypto/kdf";
 
-function getServerTOTPKey(): Buffer {
+export function getServerTOTPKey(): Buffer {
   const envKey = process.env.TOTP_ENCRYPTION_KEY;
   if (envKey && envKey.length === 64) {
     return Buffer.from(envKey, "hex");
   }
-  const secret = process.env.JWT_SECRET ?? "default-totp-key-32-bytes-long!";
-  return createHash("sha256").update(secret).digest();
+  const secret = process.env.JWT_SECRET ?? "cns-project-dev-secret-replace-in-production-with-64-chars-of-random-hex";
+  return hkdfDerive(Buffer.from(secret, "utf-8"), null, "totp-secret-encryption-key", 32);
 }
 
 /**
@@ -140,25 +140,44 @@ export function encryptTOTPSecret(secretBase32: string, usn: string = "default")
 
 /**
  * Decrypt a stored TOTP secret JSON string back to base32 secret.
+ * Tries the user's specific USN as well as case-variants and "default" for seeded accounts.
  */
 export function decryptTOTPSecret(storageJson: string, usn: string = "default"): string {
   const key = getServerTOTPKey();
   const stored = JSON.parse(storageJson);
-  const aad = {
-    record_id: `totp-${usn}`,
-    record_type: "totp_secret" as const,
-    key_version: 1,
-    algorithm: "AES-256-GCM" as const,
-  };
-  return decryptAES256GCM(
-    key,
-    {
-      ciphertext: stored.c,
-      authTag: stored.t,
-      iv: stored.i,
-      aad: JSON.stringify(aad),
-      algorithm: "AES-256-GCM",
-    },
-    aad
-  ).toString("utf-8");
+
+  const candidates = [
+    usn,
+    usn.toUpperCase(),
+    usn.toLowerCase(),
+    "default",
+  ];
+  const uniqueCandidates = Array.from(new Set(candidates));
+
+  for (const candidate of uniqueCandidates) {
+    const aad = {
+      record_id: `totp-${candidate}`,
+      record_type: "totp_secret" as const,
+      key_version: 1,
+      algorithm: "AES-256-GCM" as const,
+    };
+    try {
+      const decrypted = decryptAES256GCM(
+        key,
+        {
+          ciphertext: stored.c,
+          authTag: stored.t,
+          iv: stored.i,
+          aad: JSON.stringify(aad),
+          algorithm: "AES-256-GCM",
+        },
+        aad
+      );
+      return decrypted.toString("utf-8");
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  throw new Error("AES-256-GCM decryption failed for TOTP secret");
 }

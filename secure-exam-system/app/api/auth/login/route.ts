@@ -13,25 +13,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { argon2idVerify } from "@/lib/crypto/kdf";
-import { decryptAES256GCM } from "@/lib/crypto/aes";
-import { hkdfDerive } from "@/lib/crypto/kdf";
-import { verifyTOTP } from "@/lib/auth/totp";
+import { verifyTOTP, decryptTOTPSecret } from "@/lib/auth/totp";
 import { issueChallenge } from "@/lib/auth/session";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
-function getServerTOTPKey(): Buffer {
-  if (process.env.TOTP_ENCRYPTION_KEY) {
-    return Buffer.from(process.env.TOTP_ENCRYPTION_KEY, "hex");
-  }
-  return hkdfDerive(
-    Buffer.from(process.env.JWT_SECRET!, "utf-8"),
-    null,
-    "totp-secret-encryption-key",
-    32
-  );
-}
 
 function getClientIP(req: NextRequest): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
@@ -90,18 +77,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Verify TOTP ───────────────────────────────────────────────────
-    const stored = JSON.parse(user.totpSecret);
-    const totpKey = getServerTOTPKey();
-    const aad = {
-      record_id: `totp-${user.usn}`,
-      record_type: "totp_secret" as const,
-      key_version: 1,
-      algorithm: "AES-256-GCM" as const,
-    };
-    const secretBase32 = decryptAES256GCM(totpKey, {
-      ciphertext: stored.c, authTag: stored.t, iv: stored.i,
-      aad: JSON.stringify(aad), algorithm: "AES-256-GCM",
-    }, aad).toString("utf-8");
+    let secretBase32: string;
+    try {
+      secretBase32 = decryptTOTPSecret(user.totpSecret, user.usn);
+    } catch (decErr) {
+      console.error("[login] TOTP decryption failed for", usn, decErr);
+      await prisma.loginAttempt.create({ data: { usn, ipAddress: ip, success: false } });
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    }
+
 
     if (!verifyTOTP(secretBase32, totpCode, user.id)) {
       await prisma.loginAttempt.create({ data: { usn, ipAddress: ip, success: false } });

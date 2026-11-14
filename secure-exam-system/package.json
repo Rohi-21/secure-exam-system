@@ -18,7 +18,8 @@
     "seed": "npx tsx prisma/seed.ts",
     "generate-keys": "npx tsx scripts/generate-server-keys.ts",
     "typecheck": "npx tsc --noEmit",
-    "test:ui": "npx playwright test"
+    "test:ui": "npx playwright test",
+    "totp": "npx tsx scripts/totp.ts"
 
   },
   "dependencies": {
