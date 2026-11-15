@@ -49,3 +49,7 @@ prisma/*.db
 *.key
 *.pfx
 *.p12
+
+# Playwright CLI session artifacts
+.playwright-cli/
+
