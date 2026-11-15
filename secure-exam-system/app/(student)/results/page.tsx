@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ExamResultSummary {
   id: string;
@@ -41,77 +48,104 @@ export default function StudentResultsListPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6 sm:p-10">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="flex items-center justify-between pb-6 border-b border-gray-800">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Link href="/dashboard" className="text-gray-400 hover:text-gray-300 text-sm">
-                ← Dashboard
-              </Link>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Navbar />
+
+      <main className="flex-1">
+        <PageContainer
+          title="Examination Results & Cryptographic Proofs"
+          description="Access evaluated examination records, authenticated examiner digital signatures, and independent client-side Merkle inclusion proofs."
+          backHref="/dashboard"
+          backLabel="Back to Portal Hub"
+        >
+          {error && (
+            <div className="mb-6 p-4 bg-red-950/50 border border-red-800/80 rounded-xl text-red-300 text-xs flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span>{error}</span>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Examination Results</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              Verified evaluation records, digital examiner attestation, and Merkle inclusion proofs.
-            </p>
-          </div>
-        </div>
-
-        {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-12 text-gray-500">Loading result records…</div>
-          ) : exams.length === 0 ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center text-gray-400">
-              No examination records found.
-            </div>
-          ) : (
-            exams.map((ex) => (
-              <div
-                key={ex.id}
-                className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-gray-700 transition"
-              >
-                <div>
-                  <h3 className="font-bold text-white text-base">{ex.title}</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">{ex.description || "No description."}</p>
-                  <p className="text-xs text-gray-500 mt-1 font-mono">
-                    Status: <span className="uppercase text-blue-400">{ex.status}</span>
-                    {ex.submittedAt && (
-                      <span className="ml-3 text-gray-400">
-                        Submitted: {new Date(ex.submittedAt).toLocaleString()}
-                      </span>
-                    )}
-                  </p>
-                </div>
-
-                <div>
-                  {ex.status === "finalized" ? (
-                    <Link
-                      href={`/results/${ex.id}`}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition shadow-md shadow-blue-600/20"
-                    >
-                      View Verified Results →
-                    </Link>
-                  ) : ex.hasSubmitted ? (
-                    <span className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-1.5 rounded-lg">
-                      Pending Batch Finalization
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-500 bg-gray-800 px-3 py-1.5 rounded-lg">
-                      Not Submitted
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))
           )}
-        </div>
-      </div>
+
+          <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-16 space-y-3">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs text-slate-400">Loading evaluation records…</p>
+              </div>
+            ) : exams.length === 0 ? (
+              <EmptyState
+                title="No Evaluation Records Available"
+                description="When your examiners evaluate and finalize completed assessments, verified results with mathematical inclusion proofs will appear here."
+                actionLabel="Return to Hub"
+                onAction={() => router.push("/dashboard")}
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {exams.map((ex) => (
+                  <Card key={ex.id} hover className="border-slate-800/80">
+                    <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                      <div className="space-y-2 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <h3 className="text-base font-semibold text-slate-100">
+                            {ex.title}
+                          </h3>
+                          <Badge
+                            variant={
+                              ex.status === "finalized"
+                                ? "success"
+                                : ex.hasSubmitted
+                                ? "warning"
+                                : "default"
+                            }
+                            size="sm"
+                          >
+                            {ex.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                          {ex.description || "Comprehensive cryptographic assessment."}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-400">
+                          <span>Duration: {ex.durationMins} min</span>
+                          {ex.submittedAt && (
+                            <>
+                              <span>&bull;</span>
+                              <span>
+                                Submitted: {new Date(ex.submittedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 w-full sm:w-auto">
+                        {ex.status === "finalized" ? (
+                          <Link href={`/results/${ex.id}`} className="block w-full sm:w-auto">
+                            <Button variant="primary" size="md" className="w-full sm:w-auto">
+                              View Verified Results &amp; Proof →
+                            </Button>
+                          </Link>
+                        ) : ex.hasSubmitted ? (
+                          <Badge variant="warning" size="md">
+                            Pending Batch Evaluation
+                          </Badge>
+                        ) : (
+                          <Badge variant="default" size="md">
+                            Exam Not Submitted
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </PageContainer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

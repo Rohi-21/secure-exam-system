@@ -1,11 +1,19 @@
 "use client";
+
 /**
- * Admin Audit Log Page — /audit
- * Displays the tamper-evident audit chain with chain verification.
+ * Immutable Audit Log Page — /audit
+ * Visualizes the SHA-256 parent-linked hash chain and verifies Ed25519 audit signatures.
  */
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function getToken(): string {
   return (window as typeof window & { __accessToken?: string }).__accessToken ?? "";
@@ -23,22 +31,6 @@ interface AuditEntry {
   auditSig: string;
 }
 
-const EVENT_COLORS: Record<string, string> = {
-  USER_REGISTERED:        "text-blue-400",
-  USER_LOGIN:             "text-blue-300",
-  EXAM_CREATED:           "text-purple-400",
-  EXAM_ACTIVATED:         "text-emerald-400",
-  EXAM_CLOSED:            "text-amber-400",
-  EXAM_FINALIZED:         "text-purple-300",
-  SUBMISSION_RECEIVED:    "text-sky-400",
-  RESULT_RELEASED:        "text-emerald-300",
-  KEY_SHARE_SUBMITTED:    "text-orange-400",
-};
-
-function eventColor(eventType: string): string {
-  return EVENT_COLORS[eventType] ?? "text-slate-400";
-}
-
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,11 +39,18 @@ export default function AuditPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
 
+  useEffect(() => {
+    // Automatically load and verify audit chain on mount
+    loadAudit(true);
+  }, []);
+
   async function loadAudit(verify: boolean = false) {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const res = await fetch(`/api/audit${verify ? "?verify=true" : ""}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -62,196 +61,234 @@ export default function AuditPage() {
       }
     } catch (e: unknown) {
       setError((e as Error).message);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
+  const getEventBadgeVariant = (eventType: string) => {
+    if (eventType.includes("REGISTER") || eventType.includes("USER")) return "info";
+    if (eventType.includes("ACTIVATED") || eventType.includes("RELEASED")) return "success";
+    if (eventType.includes("CLOSED")) return "warning";
+    if (eventType.includes("KEY") || eventType.includes("SHAMIR")) return "purple";
+    return "default";
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* ── Sticky header ─────────────────────────────────────────────── */}
-      <header className="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/admin" className="text-slate-400 hover:text-white transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <div>
-              <span className="text-sm font-bold text-white">Audit Hash Chain</span>
-              <span className="ml-2 text-[10px] font-mono text-slate-500">SHA-256 · Ed25519</span>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Navbar />
+
+      <main className="flex-1">
+        <PageContainer
+          title="Immutable Audit Hash Chain"
+          description="Every critical examination lifecycle event is chained via SHA-256 digests and signed with an independent Ed25519 institutional audit key."
+          backHref="/admin"
+          backLabel="Admin Console"
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                loading={loading}
+                onClick={() => loadAudit(false)}
+              >
+                Reload Ledger
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={loading}
+                onClick={() => loadAudit(true)}
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+              >
+                Verify Hash Chain
+              </Button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => loadAudit(false)}
-              disabled={loading}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded-lg text-xs transition-colors"
+          }
+        >
+          {error && (
+            <div className="mb-6 p-4 bg-red-950/50 border border-red-800/80 rounded-xl text-red-300 text-xs flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Chain Integrity Verification Banner */}
+          {chainValid !== null && (
+            <div
+              className={`mb-6 p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all ${
+                chainValid
+                  ? "bg-emerald-950/40 border-emerald-800/80 text-emerald-300"
+                  : "bg-red-950/50 border-red-800/80 text-red-300"
+              }`}
             >
-              {loading ? "Loading…" : "Load Log"}
-            </button>
-            <button
-              onClick={() => loadAudit(true)}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Verify Chain
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-
-        {/* Error */}
-        {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-start gap-2">
-            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.75l-6.93-12A2 2 0 0010.18 4.25L3.25 16.25A2 2 0 005.07 19z" />
-            </svg>
-            {error}
-          </div>
-        )}
-
-        {/* Chain verification result banner */}
-        {chainValid !== null && (
-          <div className={`p-4 border rounded-xl flex items-start gap-3 ${
-            chainValid
-              ? "bg-emerald-500/8 border-emerald-500/20 text-emerald-400"
-              : "bg-red-500/8 border-red-500/20 text-red-400"
-          }`}>
-            {chainValid ? (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.75l-6.93-12A2 2 0 0010.18 4.25L3.25 16.25A2 2 0 005.07 19z" />
-              </svg>
-            )}
-            <div>
-              <p className="font-semibold text-sm">
-                {chainValid
-                  ? "Chain integrity VALID"
-                  : `Chain integrity INVALID — first broken link at entry #${firstInvalid}`}
-              </p>
-              <p className="text-xs opacity-70 mt-0.5">
-                {chainValid
-                  ? "All SHA-256 parent hashes and Ed25519 signatures have been verified"
-                  : "Hash or signature mismatch detected — potential tamper event"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {entries.length === 0 && !loading && !error && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-            </div>
-            <p className="text-slate-300 font-medium mb-1">No entries loaded</p>
-            <p className="text-slate-500 text-sm">Click <strong className="text-slate-400">Load Log</strong> to fetch the audit chain, or <strong className="text-slate-400">Verify Chain</strong> to load and verify at once.</p>
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-slate-800 last:border-0">
-                <div className="w-6 h-3 bg-slate-800 rounded animate-pulse" />
-                <div className="w-32 h-3 bg-slate-800 rounded animate-pulse" />
-                <div className="w-20 h-3 bg-slate-800 rounded animate-pulse" />
-                <div className="flex-1 h-3 bg-slate-800 rounded animate-pulse" />
-                <div className="w-24 h-3 bg-slate-800 rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Log table */}
-        {entries.length > 0 && !loading && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[2rem_8rem_1fr_7rem_7rem_8rem] gap-2 px-4 py-2.5 bg-slate-800/60 border-b border-slate-700/60 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              <span>#</span>
-              <span>Event</span>
-              <span>Actor / Exam</span>
-              <span>Time</span>
-              <span>Prev Hash</span>
-              <span>Entry Hash</span>
-            </div>
-
-            {entries.map((entry, i) => {
-              const isBroken = firstInvalid !== null && i >= firstInvalid;
-              const isExp = expanded === entry.sequenceNo;
-
-              return (
-                <div key={entry.sequenceNo}>
-                  <button
-                    onClick={() => setExpanded(isExp ? null : entry.sequenceNo)}
-                    className={`w-full grid grid-cols-[2rem_8rem_1fr_7rem_7rem_8rem] gap-2 px-4 py-3 border-b border-slate-800/60 text-left transition-colors text-xs ${
-                      isBroken
-                        ? "bg-red-900/15 hover:bg-red-900/25"
-                        : "hover:bg-slate-800/40"
-                    }`}
-                  >
-                    <span className="text-slate-500 font-mono">{entry.sequenceNo}</span>
-                    <span className={`font-medium truncate ${eventColor(entry.eventType)}`}>{entry.eventType.replace(/_/g, "_\u200b")}</span>
-                    <span className="text-slate-400 font-mono truncate">
-                      {entry.actorId ? entry.actorId.slice(0, 10) + "…" : "—"}
-                      {entry.examId && <span className="ml-2 text-slate-600">{entry.examId.slice(0, 8)}…</span>}
-                    </span>
-                    <span className="text-slate-500 tabular-nums">{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                    <span className="font-mono text-slate-600 truncate">{entry.prevHash.slice(0, 10)}…</span>
-                    <span className={`font-mono truncate ${isBroken ? "text-red-400" : "text-emerald-400"}`}>
-                      {entry.entryHash.slice(0, 10)}…
-                    </span>
-                  </button>
-
-                  {/* Expanded row — full hashes */}
-                  {isExp && (
-                    <div className="px-4 py-3 bg-slate-950/80 border-b border-slate-800 space-y-2 text-[11px]">
-                      <div className="grid grid-cols-[6rem_1fr] gap-2">
-                        <span className="text-slate-500 font-medium">Full hash</span>
-                        <code className="font-mono text-emerald-400 break-all select-all">{entry.entryHash}</code>
-                      </div>
-                      <div className="grid grid-cols-[6rem_1fr] gap-2">
-                        <span className="text-slate-500 font-medium">Prev hash</span>
-                        <code className="font-mono text-purple-400 break-all select-all">{entry.prevHash}</code>
-                      </div>
-                      <div className="grid grid-cols-[6rem_1fr] gap-2">
-                        <span className="text-slate-500 font-medium">Signature</span>
-                        <code className="font-mono text-blue-400 break-all select-all">{entry.auditSig.slice(0, 64)}…</code>
-                      </div>
-                      <div className="grid grid-cols-[6rem_1fr] gap-2">
-                        <span className="text-slate-500 font-medium">Timestamp</span>
-                        <span className="text-slate-300">{new Date(entry.timestamp).toISOString()}</span>
-                      </div>
-                      {Object.keys(entry.eventData).length > 0 && (
-                        <div className="grid grid-cols-[6rem_1fr] gap-2">
-                          <span className="text-slate-500 font-medium">Event data</span>
-                          <code className="font-mono text-slate-400 break-all">{JSON.stringify(entry.eventData)}</code>
-                        </div>
-                      )}
-                    </div>
+              <div className="flex items-start sm:items-center gap-3">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    chainValid
+                      ? "bg-emerald-900/60 border border-emerald-700/80 text-emerald-300"
+                      : "bg-red-900/60 border border-red-700/80 text-red-300"
+                  }`}
+                >
+                  {chainValid ? (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">
+                    {chainValid
+                      ? "Cryptographic Chain Integrity Confirmed"
+                      : `Hash Chain Discontinuity Detected at Block #${firstInvalid}`}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                    {chainValid
+                      ? "All SHA-256 parent digests, sequential block heights, and Ed25519 signatures match."
+                      : "Block digest mismatch detected. Potential database tampering or retroactive modification."}
+                  </p>
+                </div>
+              </div>
 
-        {/* Count */}
-        {entries.length > 0 && (
-          <p className="text-xs text-slate-600 text-right font-mono">{entries.length} entries loaded</p>
-        )}
-      </div>
+              <Badge variant={chainValid ? "success" : "danger"} size="md" dot>
+                {chainValid ? "100% Tamper-Evident" : "Compromised"}
+              </Badge>
+            </div>
+          )}
+
+          {/* Entries Container */}
+          {loading && entries.length === 0 ? (
+            <div className="text-center py-20 space-y-3">
+              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 font-mono">Verifying SHA-256 audit chain…</p>
+            </div>
+          ) : entries.length === 0 ? (
+            <EmptyState
+              title="Audit Ledger Empty"
+              description="No cryptographic blocks recorded yet. Actions taken on the platform will automatically chain here."
+              actionLabel="Load Audit Chain"
+              onAction={() => loadAudit(true)}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-2 text-xs font-mono text-slate-400 border-b border-slate-800/80">
+                <span>{entries.length} Blocks Chained</span>
+                <span>Click a block to inspect full SHA-256 digests</span>
+              </div>
+
+              {entries.map((entry, idx) => {
+                const isBroken = firstInvalid !== null && idx >= firstInvalid;
+                const isExp = expanded === entry.sequenceNo;
+
+                return (
+                  <Card
+                    key={entry.sequenceNo}
+                    hover
+                    className={`border-slate-800 overflow-hidden transition-all ${
+                      isBroken ? "border-red-800 bg-red-950/20" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isExp ? null : entry.sequenceNo)}
+                      className="w-full p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-left focus:outline-none"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 font-mono text-xs font-bold text-slate-300 flex items-center justify-center shrink-0 tabular-nums">
+                          #{entry.sequenceNo}
+                        </span>
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={getEventBadgeVariant(entry.eventType)} size="sm">
+                              {entry.eventType}
+                            </Badge>
+                            <span className="text-xs font-mono text-slate-400 tabular-nums">
+                              {new Date(entry.timestamp).toLocaleString([], { dateStyle: "short", timeStyle: "medium" })}
+                            </span>
+                          </div>
+                          <div className="text-xs font-mono text-slate-400 truncate mt-1">
+                            Actor: <span className="text-slate-300">{entry.actorId ? entry.actorId.slice(0, 16) + "…" : "System Kernel"}</span>
+                            {entry.examId && (
+                              <span className="ml-3 text-slate-400">
+                                Exam: <span className="text-blue-400">{entry.examId.slice(0, 12)}…</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 shrink-0 font-mono text-xs">
+                        <div className="text-right hidden md:block">
+                          <div className="text-[10px] text-slate-500 uppercase">Block Digest</div>
+                          <div className={`font-semibold ${isBroken ? "text-red-400" : "text-emerald-400"}`}>
+                            {entry.entryHash.slice(0, 12)}…
+                          </div>
+                        </div>
+                        <svg
+                          className={`w-4 h-4 text-slate-500 transition-transform ${isExp ? "rotate-180" : ""}`}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {/* Expanded Detail Panel */}
+                    {isExp && (
+                      <div className="px-5 pb-5 pt-3 border-t border-slate-800/80 bg-slate-950/70 space-y-3 font-mono text-xs">
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-slate-400 uppercase font-semibold">Entry SHA-256 Digest:</span>
+                          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-emerald-400 break-all select-all">
+                            {entry.entryHash}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-slate-400 uppercase font-semibold">Previous Block Hash (Parent Link):</span>
+                          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-purple-400 break-all select-all">
+                            {entry.prevHash}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-slate-400 uppercase font-semibold">Ed25519 Audit Signature:</span>
+                          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-blue-400 break-all select-all text-[11px]">
+                            {entry.auditSig}
+                          </div>
+                        </div>
+
+                        {Object.keys(entry.eventData).length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-[11px] text-slate-400 uppercase font-semibold">Decoded Event Payload:</span>
+                            <pre className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[11px] overflow-x-auto whitespace-pre-wrap">
+                              {JSON.stringify(entry.eventData, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </PageContainer>
+      </main>
+
+      <Footer />
     </div>
   );
 }

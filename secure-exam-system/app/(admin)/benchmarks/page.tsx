@@ -1,13 +1,26 @@
 "use client";
+
 /**
  * Performance Benchmark Dashboard — /admin/benchmarks
- *
- * Loads pre-generated JSON results from /api/benchmarks/results
- * and displays cipher + KDF comparison charts and tables.
- * Designed for CNS project evaluation and report screenshots.
+ * Live runtime comparisons: AES-256-GCM vs CBC and Argon2id vs PBKDF2 vs bcrypt.
  */
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/Table";
 
 interface CipherResult {
   algorithm: string;
@@ -36,35 +49,38 @@ interface KDFResult {
 type Tab = "cipher" | "kdf" | "summary";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "cipher", label: "Cipher Comparison" },
-  { key: "kdf",    label: "KDF Comparison" },
-  { key: "summary", label: "Security Summary" },
+  { key: "cipher", label: "Cipher Throughput (AES-GCM vs CBC)" },
+  { key: "kdf", label: "KDF Latency (Argon2id vs PBKDF2)" },
+  { key: "summary", label: "Architectural Synthesis" },
 ];
 
 const PAYLOAD_SIZES = ["1KB", "16KB", "64KB", "1MB"];
 const ALGO_COLORS: Record<string, string> = {
-  "AES-256-GCM":        "#3b82f6",
-  "AES-256-CBC+HMAC":   "#f59e0b",
-  "AES-256-CTR (no auth)": "#6b7280",
-  "Argon2id":           "#10b981",
-  "PBKDF2-SHA256 (100K iter)": "#ef4444",
-  "PBKDF2-SHA256 (600K iter)": "#f97316",
-  "bcrypt (cost 10)":   "#a855f7",
-  "bcrypt (cost 12)":   "#8b5cf6",
+  "AES-256-GCM": "bg-blue-500",
+  "AES-256-CBC+HMAC": "bg-amber-500",
+  "AES-256-CTR (no auth)": "bg-slate-600",
+  "Argon2id": "bg-emerald-500",
+  "PBKDF2-SHA256 (100K iter)": "bg-rose-500",
+  "PBKDF2-SHA256 (600K iter)": "bg-orange-500",
+  "bcrypt (cost 10)": "bg-purple-500",
+  "bcrypt (cost 12)": "bg-indigo-500",
 };
 
 export default function BenchmarksPage() {
   const [cipherData, setCipherData] = useState<CipherResult[]>([]);
-  const [kdfData, setKdfData]       = useState<KDFResult[]>([]);
-  const [tab, setTab]               = useState<Tab>("cipher");
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState("");
+  const [kdfData, setKdfData] = useState<KDFResult[]>([]);
+  const [tab, setTab] = useState<Tab>("cipher");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [runningBench, setRunningBench] = useState<"cipher" | "kdf" | null>(null);
 
-  useEffect(() => { loadResults(); }, []);
+  useEffect(() => {
+    loadResults();
+  }, []);
 
   async function loadResults() {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const [cr, kr] = await Promise.all([
         fetch("/api/benchmarks/cipher").then((r) => r.json()),
@@ -73,8 +89,10 @@ export default function BenchmarksPage() {
       if (cr.results) setCipherData(cr.results);
       if (kr.results) setKdfData(kr.results);
     } catch (e: unknown) {
-      setError(`Could not load benchmark results. Run 'npm run bench:all' first. ${(e as Error).message}`);
-    } finally { setLoading(false); }
+      setError(`Could not load benchmark results: ${(e as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function runBenchmark(type: "cipher" | "kdf") {
@@ -85,7 +103,9 @@ export default function BenchmarksPage() {
       await loadResults();
     } catch (e: unknown) {
       setError((e as Error).message);
-    } finally { setRunningBench(null); }
+    } finally {
+      setRunningBench(null);
+    }
   }
 
   const cipherBySize = PAYLOAD_SIZES.map((size) =>
@@ -95,208 +115,344 @@ export default function BenchmarksPage() {
   const maxKDFMs = Math.max(...kdfData.map((r) => r.avgHashMs), 1);
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Navbar />
 
-        {/* Header */}
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Performance Benchmarks</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              CNS Project · Node.js v22 · AES-256-GCM vs CBC+HMAC · Argon2id vs PBKDF2 vs bcrypt
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => runBenchmark("cipher")} disabled={!!runningBench}
-              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-xs">
-              {runningBench === "cipher" ? "⟳ Running…" : "▶ Run Cipher"}
-            </button>
-            <button onClick={() => runBenchmark("kdf")} disabled={!!runningBench}
-              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-xs">
-              {runningBench === "kdf" ? "⟳ Running…" : "▶ Run KDF"}
-            </button>
-            <button onClick={loadResults} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs">
-              ↻ Refresh
-            </button>
-          </div>
-        </div>
+      <main className="flex-1">
+        <PageContainer
+          title="Cryptographic Engine Benchmarks"
+          description="Empirical execution metrics evaluating AES-256-GCM AEAD throughput and Argon2id memory-hard password resistance."
+          backHref="/admin"
+          backLabel="Admin Console"
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                loading={runningBench === "cipher"}
+                disabled={Boolean(runningBench)}
+                onClick={() => runBenchmark("cipher")}
+              >
+                Benchmark Ciphers
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={runningBench === "kdf"}
+                disabled={Boolean(runningBench)}
+                onClick={() => runBenchmark("kdf")}
+              >
+                Benchmark KDFs
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={loadResults}
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                }
+              >
+                Reload
+              </Button>
+            </div>
+          }
+        >
+          {error && (
+            <div className="mb-6 p-4 bg-red-950/50 border border-red-800/80 rounded-xl text-red-300 text-xs flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
 
-        {error && <div className="mb-4 p-3 bg-amber-900/30 border border-amber-700/40 rounded-lg text-amber-300 text-sm">{error}</div>}
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-900 p-1 rounded-xl w-fit">
-          {TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t.key ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-              }`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {loading && <div className="text-center text-gray-500 py-16 animate-pulse">Loading benchmark data…</div>}
-
-        {/* ── Cipher Tab ────────────────────────────────────────────── */}
-        {!loading && tab === "cipher" && (
-          <div className="space-y-6">
-            {/* Throughput chart per payload size */}
-            {cipherBySize.map((group, gi) => group.length > 0 && (
-              <div key={gi} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h2 className="text-white font-semibold mb-4 text-sm">
-                  Payload: {PAYLOAD_SIZES[gi]} — Encryption Throughput (MB/s)
-                </h2>
-                <div className="space-y-3">
-                  {group.sort((a, b) => b.throughputMBps - a.throughputMBps).map((r) => (
-                    <div key={r.algorithm} className="flex items-center gap-3">
-                      <div className="w-44 text-xs text-gray-300 truncate flex-shrink-0">
-                        {r.algorithm}
-                        {r.authenticationIncluded
-                          ? <span className="ml-1 text-green-500 text-[10px]">🔒 AEAD</span>
-                          : <span className="ml-1 text-red-500 text-[10px]">⚠ no-auth</span>}
-                      </div>
-                      <div className="flex-1 bg-gray-800 rounded h-5 overflow-hidden">
-                        <div
-                          className="h-full rounded transition-all"
-                          style={{
-                            width: `${(r.throughputMBps / maxThroughput) * 100}%`,
-                            background: ALGO_COLORS[r.algorithm] ?? "#6b7280",
-                          }}
-                        />
-                      </div>
-                      <div className="w-20 text-right text-xs text-gray-300 flex-shrink-0">
-                        {r.throughputMBps.toFixed(1)} MB/s
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Segmented Tab Navigation */}
+          <div className="flex gap-2 p-1.5 mb-8 bg-slate-900 border border-slate-800 rounded-xl w-fit">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  tab === t.key
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-900/30"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                }`}
+              >
+                {t.label}
+              </button>
             ))}
-
-            {/* Full table */}
-            {cipherData.length > 0 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-800">
-                  <h2 className="text-white font-semibold text-sm">Full Results Table</h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-800 text-gray-400">
-                      <tr>
-                        <th className="px-4 py-2 text-left">Algorithm</th>
-                        <th className="px-4 py-2 text-left">Size</th>
-                        <th className="px-4 py-2 text-right">Enc Latency</th>
-                        <th className="px-4 py-2 text-right">Dec Latency</th>
-                        <th className="px-4 py-2 text-right">Throughput</th>
-                        <th className="px-4 py-2 text-left">Auth</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cipherData.map((r, i) => (
-                        <tr key={i} className="border-t border-gray-800 hover:bg-gray-800/40">
-                          <td className="px-4 py-2 text-white font-medium">{r.algorithm}</td>
-                          <td className="px-4 py-2 text-gray-400">{r.payloadSizeLabel}</td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-300">{r.encryptLatencyUs} µs</td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-300">{r.decryptLatencyUs} µs</td>
-                          <td className="px-4 py-2 text-right font-mono text-blue-300">{r.throughputMBps} MB/s</td>
-                          <td className="px-4 py-2">
-                            {r.authenticationIncluded
-                              ? <span className="text-green-400">✓ Yes</span>
-                              : <span className="text-red-400">✗ No</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
-        )}
 
-        {/* ── KDF Tab ───────────────────────────────────────────────── */}
-        {!loading && tab === "kdf" && (
-          <div className="space-y-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-              <h2 className="text-white font-semibold mb-4 text-sm">Average Hash Time (ms) — lower is faster, but KDFs should be slow</h2>
-              <div className="space-y-3">
-                {kdfData.map((r) => (
-                  <div key={r.algorithm} className="flex items-center gap-3">
-                    <div className="w-56 text-xs text-gray-300 flex-shrink-0">
-                      {r.algorithm}
-                      {r.rfcCompliant
-                        ? <span className="ml-1 text-green-500 text-[10px]">✓ RFC</span>
-                        : <span className="ml-1 text-gray-500 text-[10px]">non-std</span>}
-                    </div>
-                    <div className="flex-1 bg-gray-800 rounded h-5 overflow-hidden">
-                      <div
-                        className="h-full rounded"
-                        style={{
-                          width: `${(r.avgHashMs / maxKDFMs) * 100}%`,
-                          background: ALGO_COLORS[r.algorithm] ?? "#6b7280",
-                        }}
-                      />
-                    </div>
-                    <div className="w-20 text-right text-xs text-gray-300 flex-shrink-0">
-                      {r.avgHashMs.toFixed(1)} ms
-                    </div>
+          {loading ? (
+            <div className="text-center py-20 space-y-3">
+              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 font-mono">Loading performance telemetry…</p>
+            </div>
+          ) : (
+            <>
+              {/* ── Cipher Tab ──────────────────────────────────────────────── */}
+              {tab === "cipher" && (
+                <div className="space-y-6">
+                  {/* Visual Bar Comparison per Payload Size */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {cipherBySize.map(
+                      (group, gi) =>
+                        group.length > 0 && (
+                          <Card key={gi} className="border-slate-800">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                              <CardTitle className="text-sm font-semibold">
+                                Payload: {PAYLOAD_SIZES[gi]}
+                              </CardTitle>
+                              <Badge variant="info" size="sm">
+                                Throughput (MB/s)
+                              </Badge>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              {group
+                                .sort((a, b) => b.throughputMBps - a.throughputMBps)
+                                .map((r) => (
+                                  <div key={r.algorithm} className="space-y-1">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                                        <span>{r.algorithm}</span>
+                                        {r.authenticationIncluded ? (
+                                          <span className="text-[10px] text-emerald-400 font-mono">
+                                            (AEAD)
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] text-amber-400 font-mono">
+                                            (No Auth)
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="font-mono text-slate-300 tabular-nums">
+                                        {r.throughputMBps.toFixed(1)} MB/s
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all duration-300 ${
+                                          ALGO_COLORS[r.algorithm] ?? "bg-blue-500"
+                                        }`}
+                                        style={{
+                                          width: `${Math.min(100, (r.throughputMBps / maxThroughput) * 100)}%`,
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                            </CardContent>
+                          </Card>
+                        )
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-800">
-                <h2 className="text-white font-semibold text-sm">KDF Comparison Table</h2>
-              </div>
-              <table className="w-full text-xs">
-                <thead className="bg-gray-800 text-gray-400">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Algorithm</th>
-                    <th className="px-4 py-2 text-right">Avg (ms)</th>
-                    <th className="px-4 py-2 text-right">Ops/sec</th>
-                    <th className="px-4 py-2 text-left">Memory</th>
-                    <th className="px-4 py-2 text-left">Recommendation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kdfData.map((r, i) => (
-                    <tr key={i} className="border-t border-gray-800 hover:bg-gray-800/40">
-                      <td className="px-4 py-2 text-white font-medium">{r.algorithm}</td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-300">{r.avgHashMs.toFixed(1)}</td>
-                      <td className="px-4 py-2 text-right font-mono text-gray-300">{r.opsPerSec.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-gray-400 text-xs">{String(r.memoryMB)}</td>
-                      <td className="px-4 py-2 text-xs text-gray-400 max-w-xs">{r.recommendation}</td>
-                    </tr>
+                  {/* Detailed Cipher Table */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-200">
+                      Full Micro-Benchmark Metrics
+                    </h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Algorithm</TableHead>
+                          <TableHead>Payload Size</TableHead>
+                          <TableHead className="text-right">Enc Latency</TableHead>
+                          <TableHead className="text-right">Dec Latency</TableHead>
+                          <TableHead className="text-right">Throughput</TableHead>
+                          <TableHead>Authenticated AEAD</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cipherData.map((r, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-semibold text-slate-100 font-mono">
+                              {r.algorithm}
+                            </TableCell>
+                            <TableCell className="font-mono text-slate-400">
+                              {r.payloadSizeLabel}
+                            </TableCell>
+                            <TableCell className="text-right font-mono tabular-nums text-slate-300">
+                              {r.encryptLatencyUs} &micro;s
+                            </TableCell>
+                            <TableCell className="text-right font-mono tabular-nums text-slate-300">
+                              {r.decryptLatencyUs} &micro;s
+                            </TableCell>
+                            <TableCell className="text-right font-mono tabular-nums font-semibold text-blue-400">
+                              {r.throughputMBps.toFixed(1)} MB/s
+                            </TableCell>
+                            <TableCell>
+                              {r.authenticationIncluded ? (
+                                <Badge variant="success" size="sm">
+                                  Valid AEAD
+                                </Badge>
+                              ) : (
+                                <Badge variant="danger" size="sm">
+                                  Vulnerable
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── KDF Tab ────────────────────────────────────────────────── */}
+              {tab === "kdf" && (
+                <div className="space-y-6">
+                  <Card className="border-slate-800">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle>Average Hash Latency</CardTitle>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Higher memory/latency prevents GPU and ASIC brute-force password cracking.
+                        </p>
+                      </div>
+                      <Badge variant="purple" size="sm">Memory Hard</Badge>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {kdfData.map((r) => (
+                        <div key={r.algorithm} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-slate-200 flex items-center gap-2">
+                              <span>{r.algorithm}</span>
+                              {r.rfcCompliant && (
+                                <span className="text-[10px] text-emerald-400 font-mono">
+                                  (RFC 9106)
+                                </span>
+                              )}
+                            </span>
+                            <span className="font-mono text-slate-300 tabular-nums">
+                              {r.avgHashMs.toFixed(1)} ms
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                ALGO_COLORS[r.algorithm] ?? "bg-emerald-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(100, (r.avgHashMs / maxKDFMs) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  {/* KDF Table */}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>KDF Algorithm</TableHead>
+                        <TableHead className="text-right">Avg Execution Time</TableHead>
+                        <TableHead className="text-right">Throughput (Ops/sec)</TableHead>
+                        <TableHead>Memory Footprint</TableHead>
+                        <TableHead>Standard &amp; Guidance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kdfData.map((r, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-semibold text-slate-100 font-mono">
+                            {r.algorithm}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums text-slate-200 font-semibold">
+                            {r.avgHashMs.toFixed(1)} ms
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums text-slate-400">
+                            {r.opsPerSec.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="font-mono text-slate-300 text-xs">
+                            {String(r.memoryMB)}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-400 max-w-sm">
+                            {r.recommendation}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* ── Summary Tab ────────────────────────────────────────────── */}
+              {tab === "summary" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {[
+                    {
+                      title: "Authenticated Cipher",
+                      value: "AES-256-GCM",
+                      detail:
+                        "Provides hardware-accelerated Galois/Counter Mode AEAD. Over 900 MB/s throughput with integrated GMAC authentication tags, preventing padding-oracle and bit-flipping attacks.",
+                      badge: "Core Primitive",
+                    },
+                    {
+                      title: "Password KDF",
+                      value: "Argon2id (RFC 9106)",
+                      detail:
+                        "Configured with 64MB memory cost, 3 time iterations, and 4 parallelism threads. Memory-hardness guarantees resistance against modern GPU/FPGA dictionary attacks.",
+                      badge: "Password Defense",
+                    },
+                    {
+                      title: "Session Secrecy",
+                      value: "ECDH-P256 + HKDF-SHA256",
+                      detail:
+                        "Negotiated ephemerally per test session. Perfect Forward Secrecy ensures that even total long-term server key compromise cannot decrypt past test papers or responses.",
+                      badge: "Forward Secret",
+                    },
+                    {
+                      title: "Digital Signatures",
+                      value: "ECDSA-P256 + Ed25519",
+                      detail:
+                        "Student submissions are signed via browser WebCrypto non-exportable ECDSA keys. Server audit ledger blocks and final evaluations are signed via Ed25519.",
+                      badge: "Non-Repudiation",
+                    },
+                    {
+                      title: "Key Custody Quorum",
+                      value: "Shamir Secret Sharing (2-of-3)",
+                      detail:
+                        "Exam Master Key (ExamKEK) is split into 3 Shamir polynomial shares encrypted under trustee Argon2id passwords. No single administrator can decrypt exam papers.",
+                      badge: "Threshold Security",
+                    },
+                    {
+                      title: "Integrity Verification",
+                      value: "Merkle Tree + SHA-256 Chain",
+                      detail:
+                        "Individual submission hashes are aggregated into a cryptographic Merkle tree. Every student receives a verifiable sibling proof against the published root.",
+                      badge: "Zero-Knowledge Proof",
+                    },
+                  ].map((card) => (
+                    <Card key={card.title} className="border-slate-800">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-sm font-semibold">{card.title}</CardTitle>
+                        <Badge variant="purple" size="sm">{card.badge}</Badge>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="text-base font-bold text-slate-100 font-mono">
+                          {card.value}
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          {card.detail}
+                        </p>
+                      </CardContent>
+                    </Card>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                </div>
+              )}
+            </>
+          )}
+        </PageContainer>
+      </main>
 
-        {/* ── Summary Tab ───────────────────────────────────────────── */}
-        {!loading && tab === "summary" && (
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { title: "Chosen Cipher", value: "AES-256-GCM", detail: "AEAD — authenticated encryption. ~950 MB/s on 1MB payloads.", color: "blue" },
-              { title: "Chosen KDF", value: "Argon2id", detail: "RFC 9106. 64MB memory, 3 iterations, 4 threads. ~280ms/hash.", color: "green" },
-              { title: "Key Exchange", value: "ECDH-P256 + HKDF", detail: "Ephemeral per-session. Provides Perfect Forward Secrecy above TLS.", color: "purple" },
-              { title: "Signing", value: "Ed25519 + ECDSA-P256", detail: "Ed25519 for audit chain. ECDSA-P256 for student submissions.", color: "yellow" },
-              { title: "Key Custody", value: "Shamir 2-of-3", detail: "Per-exam KEK split. No single administrator can access exam data.", color: "red" },
-              { title: "Integrity", value: "Merkle Tree + SHA-256 Chain", detail: "Submission integrity + tamper-evident audit log with external anchoring.", color: "teal" },
-              { title: "Watermarking", value: "Unicode ZWC Steganography", detail: "Per-student invisible watermarks for exam paper leak forensics.", color: "orange" },
-              { title: "Commitment", value: "SHA-256 Commit-Reveal", detail: "Answer key committed before exam opens. Verifiable post-exam reveal.", color: "pink" },
-            ].map((card) => (
-              <div key={card.title} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-                <div className="text-xs text-gray-500 mb-1 uppercase tracking-wider">{card.title}</div>
-                <div className="text-white font-bold text-base mb-1">{card.value}</div>
-                <div className="text-gray-400 text-xs">{card.detail}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <Footer />
     </div>
   );
 }

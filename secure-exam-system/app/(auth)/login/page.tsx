@@ -3,23 +3,32 @@
 /**
  * Login Page
  *
- * Login flow:
+ * 3-Factor Authentication Flow:
  * 1. User enters USN + password + TOTP code → POST /api/auth/login
- * 2. Server returns a challengeNonce if 2FA passes
- * 3. Browser signs the nonce with its non-exportable Ed25519 private key
- * 4. POST /api/auth/login/challenge → server verifies → issues JWT
- * 5. JWT stored in memory (not localStorage) — refresh token in httpOnly cookie
+ * 2. Server verifies Argon2id password hash + TOTP HMAC-SHA1
+ * 3. Server issues challengeNonce
+ * 4. Client WebCrypto signs challengeNonce with non-exportable Ed25519 private key
+ * 5. POST /api/auth/login/challenge → server verifies signature → issues JWT
+ * 6. JWT stored in memory (__accessToken), refresh token in httpOnly cookie
  */
 
-import { useState } from "react";
+import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getBrowserKeys, storeBrowserKeys } from "../register/page";
 import { loadDeviceKeys } from "@/lib/crypto/client-keystore";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [authStep, setAuthStep] = useState<"credentials" | "signing" | "complete">("credentials");
 
   const [form, setForm] = useState({ usn: "", password: "", totpCode: "" });
 
@@ -27,6 +36,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setAuthStep("credentials");
 
     try {
       // ── Step 1: Password + TOTP ───────────────────────────────────────
@@ -42,11 +52,12 @@ export default function LoginPage() {
 
       const loginData = await loginRes.json();
       if (!loginRes.ok) {
-        setError(loginData.error ?? "Login failed");
+        setError(loginData.error ?? "Authentication failed. Check your USN, password, or TOTP code.");
         return;
       }
 
       const { challengeNonce, userId } = loginData;
+      setAuthStep("signing");
 
       // ── Step 2: Ed25519 session binding ───────────────────────────────
       // Administrative roles (admin, hod) do not require local browser device key binding
@@ -86,7 +97,6 @@ export default function LoginPage() {
         }
       }
 
-
       // Sign the nonce bytes — pass as ArrayBuffer for strict WebCrypto compat
       const nonceBytes = hexToBytes(challengeNonce);
       const signatureBytes = await crypto.subtle.sign(
@@ -97,10 +107,9 @@ export default function LoginPage() {
       const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
 
       await completeLogin(userId, challengeNonce, signatureB64);
-
     } catch (err) {
       console.error(err);
-      setError("Login failed. Please try again.");
+      setError("Login failed. Check server connectivity or device key state.");
     } finally {
       setLoading(false);
     }
@@ -119,12 +128,13 @@ export default function LoginPage() {
 
     const challengeData = await challengeRes.json();
     if (!challengeRes.ok) {
-      setError(challengeData.error ?? "Session verification failed");
+      setError(challengeData.error ?? "Session binding challenge failed");
       return;
     }
 
+    setAuthStep("complete");
+
     // Store access token in memory (window variable — not localStorage/sessionStorage)
-    // This prevents XSS-based token theft from storage APIs
     (window as typeof window & { __accessToken?: string }).__accessToken = challengeData.accessToken;
 
     // Redirect based on role
@@ -143,125 +153,164 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-5">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Navbar />
 
-        {/* Identity mark */}
-        <div className="text-center space-y-1">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600/15 border border-blue-500/20 mb-2">
-            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-white">Sign in</h1>
-          <p className="text-slate-400 text-sm">CNS Secure Examination System</p>
-        </div>
-
-        {/* Form card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-start gap-2">
-              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.75l-6.93-12A2 2 0 0010.18 4.25L3.25 16.25A2 2 0 005.07 19z" />
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 my-8">
+        <div className="w-full max-w-md space-y-6">
+          {/* Header Title */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 mb-1 shadow-sm">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              {error}
             </div>
-          )}
+            <h1 className="text-2xl font-bold tracking-tight text-slate-100">
+              Institutional Sign In
+            </h1>
+            <p className="text-xs text-slate-400">
+              KLE Tech Cryptographically Verifiable Examination Platform
+            </p>
+          </div>
 
-          <form onSubmit={handleLogin} className="space-y-3">
-            {/* USN */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-slate-400">University Seat Number</label>
-              <input
-                type="text"
-                placeholder="01FE23BCS240"
-                value={form.usn}
-                onChange={(e) => setForm({ ...form, usn: e.target.value.toUpperCase() })}
-                required
-                autoComplete="username"
-                spellCheck={false}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono"
-              />
-            </div>
-
-            {/* Password */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-slate-400">Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
-                autoComplete="current-password"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              />
-            </div>
-
-            {/* TOTP */}
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-slate-400">
-                Authenticator Code
-                <span className="ml-1 font-normal text-slate-500">· TOTP RFC 6238</span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9 ]{6,7}"
-                maxLength={7}
-                placeholder="000 000"
-                value={form.totpCode}
-                onChange={(e) => setForm({ ...form, totpCode: e.target.value })}
-                required
-                autoComplete="one-time-code"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-center text-lg tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg py-2.5 font-semibold text-sm transition-colors mt-1"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 spinner" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          {/* Login Card */}
+          <Card className="border-slate-800 shadow-xl shadow-slate-950/60">
+            <CardContent className="p-6 sm:p-8 space-y-5">
+              {error && (
+                <div
+                  role="alert"
+                  className="p-3.5 bg-red-950/50 border border-red-800/80 rounded-lg text-red-300 text-xs flex items-start gap-2.5 leading-relaxed"
+                >
+                  <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  Verifying…
-                </span>
-              ) : "Sign in"}
-            </button>
-          </form>
-        </div>
+                  <span>{error}</span>
+                </div>
+              )}
 
-        {/* Auth protocol — informative for evaluating professors */}
-        <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-4 space-y-2">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">3-Factor Authentication Protocol</p>
-          <div className="space-y-1.5">
-            {[
-              { n: "1", algo: "Argon2id", note: "password hash · memory-hard KDF" },
-              { n: "2", algo: "TOTP", note: "HMAC-SHA1 · 30 s window" },
-              { n: "3", algo: "Ed25519", note: "device key signs server nonce" },
-            ].map((s) => (
-              <div key={s.n} className="flex items-center gap-2.5 text-[11px]">
-                <span className="w-4 h-4 rounded-full bg-blue-500/15 border border-blue-500/20 text-blue-400 flex items-center justify-center text-[9px] font-bold flex-shrink-0">{s.n}</span>
-                <span className="font-mono text-blue-400 font-semibold">{s.algo}</span>
-                <span className="text-slate-500">{s.note}</span>
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* USN Field */}
+                <Input
+                  label="University Seat Number (USN)"
+                  placeholder="01FE23BCS240 or admin"
+                  value={form.usn}
+                  onChange={(e) => setForm({ ...form, usn: e.target.value.toUpperCase() })}
+                  required
+                  autoComplete="username"
+                  autoFocus
+                  leftIcon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                  }
+                />
+
+                {/* Password Field */}
+                <Input
+                  label="Password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  required
+                  autoComplete="current-password"
+                  leftIcon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                  }
+                />
+
+                {/* TOTP Field */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="font-medium text-slate-300">
+                      Authenticator Code (TOTP)
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      RFC 6238 · 30s
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9 ]{6,7}"
+                    maxLength={7}
+                    placeholder="000 000"
+                    value={form.totpCode}
+                    onChange={(e) => setForm({ ...form, totpCode: e.target.value })}
+                    required
+                    autoComplete="one-time-code"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-center text-lg tracking-[0.3em] font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Enter the 6-digit verification code from Google Authenticator or your authenticator app.
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  size="md"
+                  loading={loading}
+                  className="w-full mt-2"
+                >
+                  {authStep === "signing"
+                    ? "Signing Hardware Nonce…"
+                    : authStep === "complete"
+                    ? "Authenticated"
+                    : "Authenticate & Bind Session"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* 3-Factor Protocol Explanation */}
+          <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                3-Factor Authentication Pipeline
+              </span>
+              <Badge variant="purple" size="sm">Zero-Knowledge</Badge>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-950 border border-blue-800 text-blue-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  1
+                </span>
+                <span className="font-mono text-slate-200">Argon2id</span>
+                <span className="text-slate-400">Memory-hard password hashing</span>
               </div>
-            ))}
+
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-indigo-950 border border-indigo-800 text-indigo-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  2
+                </span>
+                <span className="font-mono text-slate-200">TOTP 2FA</span>
+                <span className="text-slate-400">HMAC-SHA1 time-synchronised token</span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                  3
+                </span>
+                <span className="font-mono text-slate-200">Ed25519</span>
+                <span className="text-slate-400">WebCrypto non-exportable hardware binding</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Register Link */}
+          <div className="text-center text-xs text-slate-400">
+            First time taking an exam on this device?{" "}
+            <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+              Register Device Keys
+            </Link>
           </div>
         </div>
+      </main>
 
-        <p className="text-center text-xs text-slate-600">
-          No account?{" "}
-          <a href="/register" className="text-blue-400 hover:text-blue-300 transition-colors">Register</a>
-          <span className="mx-2 text-slate-700">·</span>
-          <span className="text-slate-700">Locks after 5 failed attempts</span>
-        </p>
-      </div>
+      <Footer />
     </div>
   );
 }

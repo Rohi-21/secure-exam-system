@@ -1,8 +1,9 @@
 "use client";
+
 /**
  * Student Results Page — /results/[id]
  *
- * Security Features:
+ * Cryptographic Verification Features:
  * 1. Application-layer session decryption (if active ECDH session key in storage)
  *    or authenticated direct TLS delivery with JWT validation.
  * 2. Mathematical client-side SHA-256 Merkle inclusion proof verification
@@ -10,9 +11,15 @@
  * 3. Ed25519 server attestation signature verification.
  */
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 
 function getToken(): string {
   return (window as typeof window & { __accessToken?: string }).__accessToken ?? "";
@@ -56,9 +63,6 @@ async function sha256HexWebCrypto(str: string): Promise<string> {
     .join("");
 }
 
-/**
- * Mathematically verify the Merkle inclusion proof in browser WebCrypto
- */
 async function verifyMerkleProofClient(proof: MerkleProof, expectedRoot: string): Promise<boolean> {
   if (!proof || !proof.siblings || !expectedRoot) return false;
 
@@ -84,9 +88,11 @@ export default function StudentResultsPage() {
   const [sigValid, setSigValid] = useState<boolean | null>(null);
   const [merkleProof, setMerkleProof] = useState<MerkleProof | null>(null);
   const [merkleVerified, setMerkleVerified] = useState<boolean | null>(null);
+  const [merkleVerificationMs, setMerkleVerificationMs] = useState<number | null>(null);
   const [merkleRoot, setMerkleRoot] = useState("");
   const [submissionId, setSubmissionId] = useState("");
   const [contentHash, setContentHash] = useState("");
+  const [reverifying, setReverifying] = useState(false);
 
   useEffect(() => {
     fetchResult();
@@ -115,7 +121,6 @@ export default function StudentResultsPage() {
       let parsedResult: ResultPayload;
 
       if (data.encrypted) {
-        // Decrypt with ECDH session key (K_enc) from sessionStorage
         const sessionKeyRaw = sessionStorage.getItem(`session-key-enc-${examId}`);
         if (!sessionKeyRaw) {
           throw new Error("Session key not available for client-side decryption.");
@@ -154,10 +159,8 @@ export default function StudentResultsPage() {
       setSubmissionId(data.submissionId ?? "");
       setContentHash(data.contentHash ?? "");
 
-      // Execute mathematical Merkle proof verification
       if (data.merkleProof && data.merkleRoot) {
-        const isValid = await verifyMerkleProofClient(data.merkleProof, data.merkleRoot);
-        setMerkleVerified(isValid);
+        await runMerkleVerification(data.merkleProof, data.merkleRoot);
       }
     } catch (e: unknown) {
       setError((e as Error).message);
@@ -166,200 +169,265 @@ export default function StudentResultsPage() {
     }
   }
 
+  async function runMerkleVerification(proof: MerkleProof, root: string) {
+    setReverifying(true);
+    const start = performance.now();
+    const isValid = await verifyMerkleProofClient(proof, root);
+    const end = performance.now();
+    setMerkleVerified(isValid);
+    setMerkleVerificationMs(Number((end - start).toFixed(2)));
+    setReverifying(false);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-slate-400 text-sm">Decrypting and verifying results…</p>
+          <p className="text-xs text-slate-400 font-mono">Decrypting and verifying cryptographic proofs…</p>
         </div>
       </div>
     );
   }
 
-  const scoreColor =
-    result && result.score >= 75 ? "text-emerald-400" :
-    result && result.score >= 50 ? "text-amber-400" : "text-red-400";
-  const scoreBg =
-    result && result.score >= 75 ? "bg-emerald-500/10 border-emerald-500/20" :
-    result && result.score >= 50 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
-  const scoreLabel =
-    result && result.score >= 75 ? "Excellent" :
-    result && result.score >= 50 ? "Passed" : "Needs Improvement";
+  const score = result?.score ?? 0;
+  const isExcellent = score >= 75;
+  const isPass = score >= 50;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-10 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link href="/results" className="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            All Results
-          </Link>
-          <span className="text-xs font-mono text-slate-500">Exam {examId.slice(0, 8)}…</span>
-          <button onClick={fetchResult} className="text-xs text-slate-400 hover:text-white px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors">
-            Re-verify
-          </button>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Navbar />
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {error && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
-            <p className="font-semibold mb-1">Notice</p>
-            <p className="text-xs leading-relaxed">{error}</p>
-          </div>
-        )}
-
-        {result && (
-          <>
-            {/* ── Score Card ───────────────────────────────────────────────── */}
-            <div className={`rounded-2xl border p-8 text-center ${scoreBg}`}>
-              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase mb-4 ${scoreBg} ${scoreColor} border`}>
-                {scoreLabel}
-              </span>
-              <div className={`text-7xl font-black tracking-tight mb-3 ${scoreColor}`}>
-                {result.score}%
-              </div>
-              <div className="flex items-center justify-center gap-6 text-sm">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-emerald-400">{result.correct}</p>
-                  <p className="text-slate-400 text-xs">Correct</p>
-                </div>
-                <div className="w-px h-10 bg-slate-700" />
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-red-400">{result.incorrect}</p>
-                  <p className="text-slate-400 text-xs">Incorrect</p>
-                </div>
-                <div className="w-px h-10 bg-slate-700" />
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-white">{result.totalQuestions}</p>
-                  <p className="text-slate-400 text-xs">Total</p>
-                </div>
-              </div>
+      <main className="flex-1">
+        <PageContainer
+          title="Verified Evaluation Record"
+          description="Tamper-evident assessment outcome backed by digital signatures and zero-knowledge Merkle inclusion proofs."
+          backHref="/results"
+          backLabel="All Results"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              loading={reverifying}
+              onClick={() => {
+                if (merkleProof && merkleRoot) {
+                  runMerkleVerification(merkleProof, merkleRoot);
+                }
+              }}
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              }
+            >
+              Re-verify Proof
+            </Button>
+          }
+        >
+          {error && (
+            <div className="mb-6 p-4 bg-amber-950/50 border border-amber-800/80 rounded-xl text-amber-300 text-xs flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              <span>{error}</span>
             </div>
+          )}
 
-            {/* ── Cryptographic Verification ───────────────────────────────── */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
-                <span className="text-lg">🔐</span>
-                <h2 className="text-base font-bold text-white">Cryptographic Verification</h2>
-              </div>
+          {result && (
+            <div className="space-y-8">
+              {/* Score Showcase Hero */}
+              <div className="p-8 rounded-2xl bg-gradient-to-b from-slate-900 to-slate-900/60 border border-slate-800 shadow-xl text-center space-y-6">
+                <div className="inline-flex items-center gap-2">
+                  <Badge
+                    variant={isExcellent ? "success" : isPass ? "info" : "danger"}
+                    size="md"
+                    dot
+                  >
+                    {isExcellent ? "Distinction / Excellent" : isPass ? "Passing Grade" : "Needs Remediation"}
+                  </Badge>
+                </div>
 
-              {/* Submission Digest */}
-              {contentHash && (
-                <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-300">Submission Digest (SHA-256)</span>
-                    <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      Verified
-                    </span>
+                <div className="flex flex-col items-center justify-center">
+                  <div
+                    className={`text-6xl sm:text-7xl font-extrabold tracking-tight tabular-nums ${
+                      isExcellent ? "text-emerald-400" : isPass ? "text-blue-400" : "text-red-400"
+                    }`}
+                  >
+                    {score}%
                   </div>
-                  <code className="text-[11px] font-mono text-blue-300 break-all block select-all leading-relaxed">
-                    {contentHash}
-                  </code>
-                  <p className="text-[10px] text-slate-500">SHA-256 of your RFC 8785-canonicalized answers</p>
-                </div>
-              )}
-
-              {/* Merkle Proof */}
-              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">Merkle Inclusion Proof</span>
-                  <span className={`inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded border ${
-                    merkleVerified === true
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                      : merkleVerified === false
-                      ? "bg-red-500/15 text-red-400 border-red-500/20"
-                      : "bg-slate-700 text-slate-400 border-slate-600"
-                  }`}>
-                    {merkleVerified === true ? (
-                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Verified in Browser</>
-                    ) : merkleVerified === false ? "✗ Failed" : "Pending"}
+                  <span className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-wider">
+                    Official Cryptographic Grade
                   </span>
                 </div>
-                {merkleRoot && (
-                  <div className="text-[10px] font-mono text-slate-500 break-all">
-                    Batch Root: <span className="text-purple-400">{merkleRoot.slice(0, 32)}…</span>
+
+                <div className="grid grid-cols-3 gap-4 max-w-md mx-auto pt-4 border-t border-slate-800/80">
+                  <div className="text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-400 tabular-nums">
+                      {result.correct}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">Correct</div>
                   </div>
-                )}
-                <p className="text-[10px] text-slate-500">
-                  Your submission is mathematically bound into the finalized result batch
-                </p>
-              </div>
-
-              {/* Server Attestation */}
-              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">Server Attestation (Ed25519)</span>
-                  <span className={`inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded border ${
-                    sigValid
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                      : "bg-amber-500/15 text-amber-400 border-amber-500/20"
-                  }`}>
-                    {sigValid ? (
-                      <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Signed by Exam Server</>
-                    ) : "Recorded"}
-                  </span>
+                  <div className="text-center border-x border-slate-800">
+                    <div className="text-xl sm:text-2xl font-bold text-red-400 tabular-nums">
+                      {result.incorrect}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">Incorrect</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-200 tabular-nums">
+                      {result.totalQuestions}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">Total Questions</div>
+                  </div>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  Result digest signed with the institution Ed25519 key — guarantees authentic evaluation
-                </p>
               </div>
 
-              {/* ECDSA Submission Signature */}
-              <div className="p-4 bg-slate-800/50 border border-slate-700/60 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">Your Submission Signature</span>
-                  <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                    ECDSA-P256
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-500">
-                  Non-repudiable: signed with your non-exportable browser ECDSA key before encryption
-                </p>
-              </div>
-            </div>
-
-            {/* ── Question Breakdown ───────────────────────────────────────── */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <h2 className="text-base font-bold text-white pb-3 border-b border-slate-800">
-                Question Breakdown
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {Object.entries(result.details)
-                  .sort(([a], [b]) => Number(a) - Number(b))
-                  .map(([qNo, d]) => (
-                    <div
-                      key={qNo}
-                      className={`p-3.5 rounded-xl border flex items-center justify-between ${
-                        d.isCorrect
-                          ? "bg-emerald-500/8 border-emerald-500/20"
-                          : "bg-red-500/8 border-red-500/20"
-                      }`}
+              {/* Cryptographic Proof Verification Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Merkle Proof Card */}
+                <Card className="border-slate-800">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Merkle Inclusion Proof</CardTitle>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Mathematical guarantee of result inclusion
+                      </p>
+                    </div>
+                    <Badge
+                      variant={merkleVerified === true ? "success" : merkleVerified === false ? "danger" : "default"}
+                      size="sm"
                     >
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-white">Q{qNo}</span>
-                        <div className="text-[10px] text-slate-400">
-                          Your answer: <strong className="text-white">{d.given || "—"}</strong>
-                          {!d.isCorrect && (
-                            <span className="ml-2 text-emerald-400">
-                              Correct: <strong>{d.correct}</strong>
+                      {merkleVerified === true
+                        ? `Valid ✓ (${merkleVerificationMs ?? 0}ms)`
+                        : merkleVerified === false
+                        ? "Verification Failed"
+                        : "Pending Verification"}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-xs font-mono">
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                      <div className="text-[11px] text-slate-500 uppercase">Batch Merkle Root</div>
+                      <div className="text-purple-400 text-[11px] break-all select-all font-mono">
+                        {merkleRoot || "Not available"}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                      <div className="text-[11px] text-slate-500 uppercase">Your Submission Leaf Hash</div>
+                      <div className="text-blue-400 text-[11px] break-all select-all font-mono">
+                        {merkleProof?.leafHash || contentHash || "Not available"}
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] font-sans text-slate-400 leading-relaxed">
+                      Your answer hash is evaluated upward through {merkleProof?.siblings?.length ?? 0} intermediate Merkle tree sibling nodes in browser WebCrypto until it matches the published root hash.
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Digital Attestation Card */}
+                <Card className="border-slate-800">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Digital Attestation &amp; Signatures</CardTitle>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Institutional non-repudiation audit
+                      </p>
+                    </div>
+                    <Badge variant={sigValid ? "success" : "info"} size="sm">
+                      {sigValid ? "Ed25519 Verified" : "Recorded"}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-xs">
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
+                        <div>
+                          <div className="font-semibold text-slate-200">Candidate Signature</div>
+                          <div className="text-[11px] text-slate-400">ECDSA-P256 on hardware</div>
+                        </div>
+                        <Badge variant="info" size="sm">Device Bound</Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
+                        <div>
+                          <div className="font-semibold text-slate-200">Examiner Evaluation</div>
+                          <div className="text-[11px] text-slate-400">Ed25519 Institutional Key</div>
+                        </div>
+                        <Badge variant="purple" size="sm">Attested</Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
+                        <div>
+                          <div className="font-semibold text-slate-200">Audit Ledger Record</div>
+                          <div className="text-[11px] text-slate-400">SHA-256 Chained Block</div>
+                        </div>
+                        <Badge variant="success" size="sm">Immutable</Badge>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Neither examiners nor administrators can alter this score without invalidating both the candidate ECDSA signature and the batch Merkle root.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Question Breakdown Grid */}
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-slate-100 pb-2 border-b border-slate-800/80">
+                  Detailed Itemized Evaluation
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.entries(result.details)
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([qNo, d]) => (
+                      <div
+                        key={qNo}
+                        className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-colors ${
+                          d.isCorrect
+                            ? "bg-emerald-950/30 border-emerald-800/60"
+                            : "bg-red-950/30 border-red-800/60"
+                        }`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold font-mono text-slate-200">
+                              Question {qNo}
                             </span>
-                          )}
+                            <Badge variant={d.isCorrect ? "success" : "danger"} size="sm">
+                              {d.isCorrect ? "Correct (+1)" : "Incorrect (0)"}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            Your selected answer: <strong className="text-slate-100">{d.given || "None"}</strong>
+                            {!d.isCorrect && (
+                              <span className="ml-3 text-emerald-400">
+                                Correct key: <strong>{d.correct}</strong>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
+                            d.isCorrect
+                              ? "bg-emerald-900/60 text-emerald-300 border border-emerald-700/80"
+                              : "bg-red-900/60 text-red-300 border border-red-700/80"
+                          }`}
+                        >
+                          {d.isCorrect ? "✓" : "✗"}
                         </div>
                       </div>
-                      <span className={`text-sm font-bold ${d.isCorrect ? "text-emerald-400" : "text-red-400"}`}>
-                        {d.isCorrect ? "✓" : "✗"}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </PageContainer>
+      </main>
+
+      <Footer />
     </div>
   );
 }
