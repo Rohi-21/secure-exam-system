@@ -146,3 +146,54 @@ button:not(:disabled),
     animation: none;
   }
 }
+
+/* ── 21st.dev Responsive Hero Banner Animations & Typography ─────────────── */
+
+@keyframes heroFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-slide-in-1 {
+  animation: heroFadeSlideIn 0.5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 0ms;
+}
+
+.animate-fade-slide-in-2 {
+  animation: heroFadeSlideIn 0.55s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 80ms;
+}
+
+.animate-fade-slide-in-3 {
+  animation: heroFadeSlideIn 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 160ms;
+}
+
+.animate-fade-slide-in-4 {
+  animation: heroFadeSlideIn 0.65s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 240ms;
+}
+
+.animate-fade-slide-in-5 {
+  animation: heroFadeSlideIn 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation-delay: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-slide-in-1,
+  .animate-fade-slide-in-2,
+  .animate-fade-slide-in-3,
+  .animate-fade-slide-in-4,
+  .animate-fade-slide-in-5 {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+

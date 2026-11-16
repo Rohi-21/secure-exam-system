@@ -5,3 +5,5 @@ export * from "./Card";
 export * from "./Modal";
 export * from "./EmptyState";
 export * from "./Table";
+export * from "./responsive-hero-banner";
+export * from "./demo";
