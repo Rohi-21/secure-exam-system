@@ -23,15 +23,19 @@ const PUBLIC_PATHS = [
   "/login",
   "/register",
   "/api/auth/login",
+  "/api/auth/login/challenge",
   "/api/auth/register",
+  "/api/auth/register/verify-totp",
   "/api/auth/refresh",
   "/api/auth/logout",
+  "/api/benchmarks/cipher",
+  "/api/benchmarks/kdf",
 ];
 
 // Role-based access rules — order matters (first match wins)
 const RBAC_RULES: Array<{ prefix: string; roles: string[] }> = [
-  { prefix: "/audit",         roles: ["admin", "hod"] },
-  { prefix: "/benchmarks",    roles: ["admin", "hod"] },
+  { prefix: "/audit",         roles: ["admin", "hod", "examiner", "student"] },
+  { prefix: "/benchmarks",    roles: ["admin", "hod", "examiner"] },
   { prefix: "/admin",         roles: ["admin", "hod"] },
   { prefix: "/api/admin",     roles: ["admin", "hod"] },
   { prefix: "/api/keys",      roles: ["examiner", "admin", "hod"] },
@@ -47,7 +51,7 @@ const RBAC_RULES: Array<{ prefix: string; roles: string[] }> = [
 const rateLimitStore = new Map<string, { count: number; windowStart: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 100;          // requests per minute per IP
-const AUTH_RATE_LIMIT_MAX = 5;       // for /api/auth/login specifically
+const AUTH_RATE_LIMIT_MAX = 10;      // for /api/auth/login specifically
 
 function getClientIP(req: NextRequest): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0].trim()
@@ -74,6 +78,14 @@ export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const ip = getClientIP(req);
 
+  // CRITICAL SECURITY: Create sanitized request headers stripping all client-supplied identity claims
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-role");
+  requestHeaders.delete("x-user-usn");
+  requestHeaders.delete("x-usn");
+  requestHeaders.delete("x-auth-session-id");
+
   // ── Rate limiting ─────────────────────────────────────────────────────
   const isAuthRoute = pathname.startsWith("/api/auth/login");
   const rateLimitKey = `${ip}:${isAuthRoute ? "auth" : "general"}`;
@@ -88,7 +100,7 @@ export default async function proxy(req: NextRequest) {
 
   // ── Public paths — no auth needed ────────────────────────────────────
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // ── JWT verification ─────────────────────────────────────────────────
@@ -106,8 +118,12 @@ export default async function proxy(req: NextRequest) {
 
   let payload: { userId: string; role: string; usn: string; sessionId: string };
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-    const { payload: p } = await jwtVerify(token, secret);
+    const secret = new TextEncoder().encode(
+      process.env.JWT_SECRET ?? "cns-project-dev-secret-replace-in-production-with-64-chars-of-random-hex"
+    );
+    const { payload: p } = await jwtVerify(token, secret, {
+      algorithms: ["HS256"],
+    });
     payload = p as typeof payload;
   } catch {
     if (pathname.startsWith("/api/")) {
@@ -129,11 +145,11 @@ export default async function proxy(req: NextRequest) {
     }
   }
 
-  // ── Pass user info to API routes via headers ──────────────────────────
-  const requestHeaders = new Headers(req.headers);
+  // ── Pass verified user info to API routes via headers ──────────────────
   requestHeaders.set("x-user-id", payload.userId);
   requestHeaders.set("x-user-role", payload.role);
   requestHeaders.set("x-user-usn", payload.usn);
+  requestHeaders.set("x-usn", payload.usn);
   // Independent authenticated application session ID (distinct from x-exam-session-id)
   requestHeaders.set("x-auth-session-id", payload.sessionId);
 

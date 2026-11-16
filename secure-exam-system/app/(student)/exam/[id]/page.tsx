@@ -94,6 +94,10 @@ export default function StudentExamPage() {
   const [lastAutosave, setLastAutosave] = useState<string | null>(null);
 
   const sessionEncKeyRef = useRef<CryptoKey | null>(null);
+  const deadlineRef = useRef<number | null>(null);
+  const answersRef = useRef<Record<number, string>>(answers);
+  answersRef.current = answers;
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   // ── ECDH Handshake & Load Questions ───────────────────────────────────────
   useEffect(() => {
@@ -210,11 +214,22 @@ export default function StudentExamPage() {
         },
         sharedSecretKey,
         { name: "AES-GCM", length: 256 },
-        false,
+        true,
         ["encrypt", "decrypt"]
       );
 
       sessionEncKeyRef.current = encKey;
+
+      try {
+        const rawKey = await crypto.subtle.exportKey("raw", encKey);
+        const hexKey = Array.from(new Uint8Array(rawKey))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        sessionStorage.setItem(`session-${examId}`, hs.sessionId);
+        sessionStorage.setItem(`session-key-enc-${examId}`, hexKey);
+      } catch (err) {
+        console.warn("[session] Could not cache session key in sessionStorage", err);
+      }
 
       // Fetch questions with separated session header
       setStatus("Retrieving encrypted examination paper…");
@@ -257,6 +272,7 @@ export default function StudentExamPage() {
         const globalRemainingSec = Math.max(0, Math.floor((globalEnd - serverNow) / 1000));
         remainingSec = Math.min(remainingSec, globalRemainingSec);
       }
+      deadlineRef.current = Date.now() + remainingSec * 1000;
       setTimeLeft(remainingSec);
 
       // Restore encrypted draft from IndexedDB if available
@@ -299,24 +315,42 @@ export default function StudentExamPage() {
   // ── Authoritative Countdown Timer ─────────────────────────────────────────
   useEffect(() => {
     if (phase !== "exam") return;
-    const t = setInterval(() => {
-      setTimeLeft((s) => {
-        if (s <= 1) {
-          clearInterval(t);
-          handleSubmit();
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
+
+    const checkTime = () => {
+      if (!deadlineRef.current) return;
+      const rem = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      setTimeLeft(rem);
+      if (rem <= 0) {
+        handleSubmitRef.current();
+      }
+    };
+
+    const t = setInterval(checkTime, 1000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkTime();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [phase]);
 
   // ── Keyboard Navigation ───────────────────────────────────────────────────
   useEffect(() => {
-    if (phase !== "exam") return;
+    if (phase !== "exam" || showConfirm) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const activeQ = questions.find((q) => q.questionNo === currentQ);
       if (!activeQ) return;
@@ -340,7 +374,7 @@ export default function StudentExamPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [phase, currentQ, questions, answers]);
+  }, [phase, showConfirm, currentQ, questions]);
 
   // ── Secure Submission ─────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
@@ -350,8 +384,9 @@ export default function StudentExamPage() {
     try {
       const submissionNonce = crypto.randomUUID();
 
-      // 1. Canonicalize answers
-      const canonical = canonicalizeAnswers(answers);
+      // 1. Canonicalize answers from current answersRef
+      const currentAnswers = answersRef.current;
+      const canonical = canonicalizeAnswers(currentAnswers);
       const canonicalJson = canonicalJsonStringify(canonical);
       const contentHash = await sha256HexWebCrypto(canonicalJson);
 
@@ -442,9 +477,11 @@ export default function StudentExamPage() {
       setPhase("submitted");
     } catch (e: unknown) {
       setError((e as Error).message);
-      setPhase("error");
+      setPhase("exam");
     }
-  }, [phase, examId, answers, sessionId, studentId]);
+  }, [phase, examId, sessionId, studentId]);
+
+  handleSubmitRef.current = handleSubmit;
 
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;

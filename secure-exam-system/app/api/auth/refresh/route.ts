@@ -22,8 +22,22 @@ export async function POST(req: NextRequest) {
 
     // ── Find and validate stored token ────────────────────────────────
     const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
-    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-      return NextResponse.json({ error: "Invalid or expired refresh token" }, { status: 401 });
+    if (!stored) {
+      return NextResponse.json({ error: "Invalid refresh token" }, { status: 401 });
+    }
+
+    // RFC 6819 §5.2.2.3 Token Reuse Detection:
+    // If a revoked token is presented, suspect token theft and revoke all tokens for this user
+    if (stored.revoked) {
+      await prisma.refreshToken.updateMany({
+        where: { userId: stored.userId },
+        data: { revoked: true },
+      });
+      return NextResponse.json({ error: "Refresh token reuse detected. All sessions revoked." }, { status: 401 });
+    }
+
+    if (stored.expiresAt < new Date()) {
+      return NextResponse.json({ error: "Expired refresh token" }, { status: 401 });
     }
 
     // ── Revoke old token ──────────────────────────────────────────────
@@ -71,7 +85,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      path: "/api/auth/refresh",
+      path: "/api/auth",
       expires: expiresAt,
     });
 

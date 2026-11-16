@@ -52,7 +52,14 @@ export function canonicalSha256Hex(obj: unknown): string {
  */
 export function canonicalizeAnswers(answers: Record<string | number, string>): Record<string, string> {
   const normalized: Record<string, string> = {};
-  const keys = Object.keys(answers).sort((a, b) => Number(a) - Number(b));
+  const keys = Object.keys(answers).sort((a, b) => {
+    const numA = Number(a);
+    const numB = Number(b);
+    if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+      return numA - numB;
+    }
+    return a.localeCompare(b);
+  });
 
   for (const k of keys) {
     normalized[String(k)] = String(answers[k]).trim().toUpperCase();

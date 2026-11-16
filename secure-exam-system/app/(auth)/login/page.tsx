@@ -140,7 +140,7 @@ export default function LoginPage() {
     // Redirect based on role
     const role = challengeData.user?.role;
     if (role === "admin" || role === "hod") router.push("/admin");
-    else if (role === "examiner") router.push("/examiner");
+    else if (role === "examiner") router.push("/exams");
     else router.push("/dashboard");
   }
 

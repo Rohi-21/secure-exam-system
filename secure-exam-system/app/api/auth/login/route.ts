@@ -60,8 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Constant-time: always verify password even if user not found ───
-    // (prevents timing-based user enumeration)
-    const dummyHash = "$argon2id$v=19$m=65536,t=3,p=4$invalid";
+    // (prevents timing-based user enumeration with genuine ~300ms verification)
+    const dummyHash = "$argon2id$v=19$m=65536,t=3,p=4$mE/olSOCdhjXC3+oO31O7Q$ZtJzEVj8w7+777OdrKCM2BLoa0tRvaqbVZPhezLf398";
     const passwordOk = user
       ? await argon2idVerify(user.passwordHash, password)
       : await argon2idVerify(dummyHash, password).catch(() => false);
@@ -96,8 +96,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-
     if (!verifyTOTP(secretBase32, totpCode, user.id)) {
+      const newFailCount = (user.failedAttempts ?? 0) + 1;
+      const shouldLock = newFailCount >= MAX_ATTEMPTS;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedAttempts: newFailCount,
+          isLocked: shouldLock,
+          lockedUntil: shouldLock
+            ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000)
+            : undefined,
+        },
+      });
       await prisma.loginAttempt.create({ data: { usn, ipAddress: ip, success: false } });
       return NextResponse.json({ error: "Invalid TOTP code" }, { status: 401 });
     }

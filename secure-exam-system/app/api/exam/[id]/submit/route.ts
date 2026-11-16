@@ -67,6 +67,9 @@ export async function POST(
     }
 
     const now = new Date();
+    if (now < exam.startTime) {
+      return NextResponse.json({ error: "Exam window has not opened yet" }, { status: 400 });
+    }
     if (now > exam.endTime) {
       return NextResponse.json({ error: "Exam window has closed" }, { status: 400 });
     }

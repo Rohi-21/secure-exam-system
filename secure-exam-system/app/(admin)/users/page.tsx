@@ -78,6 +78,24 @@ export default function AdminUsersPage() {
   async function handleProvision(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
+
+    if (!form.usn.trim()) {
+      setFormError("Please enter a USN or staff identifier.");
+      return;
+    }
+    if (!form.name.trim()) {
+      setFormError("Please enter the user's full name.");
+      return;
+    }
+    if (!form.email.trim() || !form.email.includes("@")) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+    if (!form.password || form.password.length < 8) {
+      setFormError("Temporary password must be at least 8 characters long.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/users", {

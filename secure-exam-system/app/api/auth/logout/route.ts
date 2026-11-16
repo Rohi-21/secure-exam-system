@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      path: "/api/auth/refresh",
+      path: "/api/auth",
       maxAge: 0,
     });
     return response;

@@ -20,6 +20,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function getToken(): string {
   return (window as typeof window & { __accessToken?: string }).__accessToken ?? "";
@@ -123,31 +124,40 @@ export default function StudentResultsPage() {
       if (data.encrypted) {
         const sessionKeyRaw = sessionStorage.getItem(`session-key-enc-${examId}`);
         if (!sessionKeyRaw) {
-          throw new Error("Session key not available for client-side decryption.");
+          // Re-fetch over authenticated TLS without session header
+          const fallbackRes = await fetch(`/api/exam/${examId}/results`, {
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+            },
+            credentials: "include",
+          });
+          const fallbackData = await fallbackRes.json();
+          if (!fallbackRes.ok) throw new Error(fallbackData.error ?? "Failed to retrieve results");
+          parsedResult = fallbackData.result;
+        } else {
+          const encKey = await crypto.subtle.importKey(
+            "raw",
+            hexToBytes(sessionKeyRaw).buffer.slice(0) as ArrayBuffer,
+            { name: "AES-GCM" },
+            false,
+            ["decrypt"]
+          );
+
+          const { ciphertext, authTag, iv } = data.result;
+          const ctBuf = base64ToBytes(ciphertext);
+          const tagBuf = base64ToBytes(authTag);
+          const combined = new Uint8Array(ctBuf.length + tagBuf.length);
+          combined.set(ctBuf);
+          combined.set(tagBuf, ctBuf.length);
+
+          const plainBuf = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: base64ToBytes(iv).buffer.slice(0) as ArrayBuffer },
+            encKey,
+            combined.buffer.slice(0) as ArrayBuffer
+          );
+
+          parsedResult = JSON.parse(new TextDecoder().decode(plainBuf));
         }
-
-        const encKey = await crypto.subtle.importKey(
-          "raw",
-          hexToBytes(sessionKeyRaw).buffer.slice(0) as ArrayBuffer,
-          { name: "AES-GCM" },
-          false,
-          ["decrypt"]
-        );
-
-        const { ciphertext, authTag, iv } = data.result;
-        const ctBuf = base64ToBytes(ciphertext);
-        const tagBuf = base64ToBytes(authTag);
-        const combined = new Uint8Array(ctBuf.length + tagBuf.length);
-        combined.set(ctBuf);
-        combined.set(tagBuf, ctBuf.length);
-
-        const plainBuf = await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: base64ToBytes(iv).buffer.slice(0) as ArrayBuffer },
-          encKey,
-          combined.buffer.slice(0) as ArrayBuffer
-        );
-
-        parsedResult = JSON.parse(new TextDecoder().decode(plainBuf));
       } else {
         parsedResult = data.result;
       }
@@ -205,31 +215,46 @@ export default function StudentResultsPage() {
           backHref="/results"
           backLabel="All Results"
           actions={
-            <Button
-              variant="outline"
-              size="sm"
-              loading={reverifying}
-              onClick={() => {
-                if (merkleProof && merkleRoot) {
-                  runMerkleVerification(merkleProof, merkleRoot);
+            result ? (
+              <Button
+                variant="outline"
+                size="sm"
+                loading={reverifying}
+                onClick={() => {
+                  if (merkleProof && merkleRoot) {
+                    runMerkleVerification(merkleProof, merkleRoot);
+                  }
+                }}
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
                 }
-              }}
-              icon={
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-              }
-            >
-              Re-verify Proof
-            </Button>
+              >
+                Re-verify Proof
+              </Button>
+            ) : undefined
           }
         >
-          {error && (
+          {error && result && (
             <div className="mb-6 p-4 bg-amber-950/50 border border-amber-800/80 rounded-xl text-amber-300 text-xs flex items-start gap-2.5">
               <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
               </svg>
               <span>{error}</span>
+            </div>
+          )}
+
+          {!result && (
+            <div className="py-8">
+              <EmptyState
+                title="Evaluation Record Not Yet Released"
+                description={error || "Your examination has been securely submitted, signed, and batched into the cryptographic ledger. Results will appear here once the examiner concludes evaluation and releases the graded records."}
+                actionLabel="Return to Dashboard"
+                onAction={() => router.push("/dashboard")}
+                secondaryActionLabel="View All Results"
+                onSecondaryAction={() => router.push("/results")}
+              />
             </div>
           )}
 

@@ -56,8 +56,39 @@ export async function signAccessToken(payload: Omit<AccessTokenPayload, "iat" | 
  * Throws if expired or invalid signature.
  */
 export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
-  const { payload } = await jwtVerify(token, getSecret());
-  return payload as AccessTokenPayload;
+  const { payload } = await jwtVerify(token, getSecret(), {
+    algorithms: ["HS256"],
+  });
+  return payload as unknown as AccessTokenPayload;
+}
+
+/**
+ * Extract and verify authenticated user from request cookie or Authorization header.
+ * Defense-in-depth helper for API routes and middleware.
+ */
+export async function getAuthUser(req: Request): Promise<AccessTokenPayload | null> {
+  try {
+    const authHeader = req.headers.get("authorization");
+    let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+
+    if (!token && "cookies" in req) {
+      const nextReq = req as { cookies: { get: (name: string) => { value: string } | undefined } };
+      token = nextReq.cookies.get("auth_token")?.value ?? null;
+    }
+
+    if (!token) {
+      const cookieHeader = req.headers.get("cookie");
+      if (cookieHeader) {
+        const match = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]+)/);
+        if (match) token = decodeURIComponent(match[1]);
+      }
+    }
+
+    if (!token) return null;
+    return await verifyAccessToken(token);
+  } catch {
+    return null;
+  }
 }
 
 /**

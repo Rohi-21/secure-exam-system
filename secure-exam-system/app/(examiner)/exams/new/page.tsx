@@ -16,9 +16,19 @@ export default function NewExamPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  function getLocalISOString(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
   const now = new Date();
-  const defaultStart = new Date(now.getTime() + 10 * 60000).toISOString().slice(0, 16);
-  const defaultEnd = new Date(now.getTime() + 120 * 60000).toISOString().slice(0, 16);
+  const defaultStart = getLocalISOString(new Date(now.getTime() + 10 * 60000));
+  const defaultEnd = getLocalISOString(new Date(now.getTime() + 120 * 60000));
 
   const [form, setForm] = useState({
     title: "",
@@ -34,6 +44,31 @@ export default function NewExamPage() {
   async function handleCreateExam(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!form.title.trim()) {
+      setError("Please enter an examination title.");
+      return;
+    }
+
+    const startMs = new Date(form.startTime).getTime();
+    const endMs = new Date(form.endTime).getTime();
+
+    if (isNaN(startMs) || isNaN(endMs)) {
+      setError("Please enter valid start and end dates.");
+      return;
+    }
+
+    if (endMs <= startMs) {
+      setError("Examination end time must be after the start time.");
+      return;
+    }
+
+    const durationMs = Number(form.durationMins) * 60000;
+    if (endMs - startMs < durationMs) {
+      setError(`The examination window (${Math.round((endMs - startMs) / 60000)} mins) cannot be shorter than the exam duration (${form.durationMins} mins).`);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -42,8 +77,8 @@ export default function NewExamPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          title: form.title,
-          description: form.description,
+          title: form.title.trim(),
+          description: form.description.trim(),
           durationMins: Number(form.durationMins),
           startTime: new Date(form.startTime).toISOString(),
           endTime: new Date(form.endTime).toISOString(),

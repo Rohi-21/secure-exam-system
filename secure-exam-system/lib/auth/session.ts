@@ -51,12 +51,13 @@ export function verifyChallenge(
     }
     userId = record.userId;
     pendingChallenges.delete(nonce);
+  } else {
+    // Prevent replay via fallback map
+    pendingChallenges.delete(nonce);
   }
 
-  // If browser has no local device key in IndexedDB (e.g. admin or staff provisioned accounts),
-  // allow proceeding with standard 2FA (password + TOTP)
-  if (signature === "no-key-in-memory") {
-    return { valid: true, userId };
+  if (!signature || signature === "no-key-in-memory") {
+    return { valid: false, userId };
   }
 
   // Verify Ed25519 signature: user signed the raw nonce bytes

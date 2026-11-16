@@ -92,6 +92,14 @@ export function decryptAES256GCM(
   const iv = Buffer.from(payload.iv, "base64");
   const ciphertext = Buffer.from(payload.ciphertext, "base64");
   const authTag = Buffer.from(payload.authTag, "base64");
+
+  if (iv.length !== 12) {
+    throw new Error(`AES-256-GCM requires a 12-byte IV, got ${iv.length}`);
+  }
+  if (authTag.length !== 16) {
+    throw new Error(`AES-256-GCM requires a 16-byte auth tag, got ${authTag.length}`);
+  }
+
   const aadBuffer = Buffer.from(JSON.stringify(aad), "utf-8");
 
   const decipher = createDecipheriv("aes-256-gcm", key, iv);

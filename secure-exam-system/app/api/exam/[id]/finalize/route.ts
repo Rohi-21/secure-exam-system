@@ -25,8 +25,16 @@ export async function POST(
     const role = req.headers.get("x-user-role");
     const { id: examId } = await params;
 
+    const actorId = req.headers.get("x-user-id");
+
     if (!["examiner", "admin", "hod"].includes(role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (role === "examiner" && exam.createdById !== actorId) {
+      return NextResponse.json({ error: "Forbidden: You do not have permission to finalize this examination" }, { status: 403 });
     }
 
     // ── Fetch all submissions (sorted deterministically by studentId) ──
@@ -55,22 +63,21 @@ export async function POST(
       });
     });
 
-    await prisma.$transaction(updateOps);
-
-    // Store Merkle root on each result and release results to candidates
-    await prisma.result.updateMany({
-      where: { examId },
-      data: {
-        merkleRoot,
-        releasedAt: new Date(),
-      },
-    });
-
-    // Mark exam as finalized
-    await prisma.exam.update({
-      where: { id: examId },
-      data: { status: "finalized" },
-    });
+    // Execute submission proofs, results update, and exam status in a single atomic transaction
+    await prisma.$transaction([
+      ...updateOps,
+      prisma.result.updateMany({
+        where: { examId },
+        data: {
+          merkleRoot,
+          releasedAt: new Date(),
+        },
+      }),
+      prisma.exam.update({
+        where: { id: examId },
+        data: { status: "finalized" },
+      }),
+    ]);
 
     // Append tamper-evident audit log
     const auditPrivKey = process.env.AUDIT_ED25519_PRIVATE_KEY_PEM ?? "";

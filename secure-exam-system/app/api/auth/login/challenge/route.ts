@@ -42,12 +42,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired challenge nonce" }, { status: 401 });
     }
 
-    // For students who have device key binding, enforce Ed25519 cryptographic signature.
-    // For admin/hod accounts, 2FA (Argon2id + TOTP) + single-use server nonce is complete.
-    if (user.role === "student" && signature !== "no-key-in-memory" && !valid) {
+    // For students who have device key binding, enforce Ed25519 cryptographic signature strictly.
+    // For admin/hod/examiner seed accounts without browser keys, allow fallback only if role is not student.
+    if (user.role === "student") {
+      if (!valid) {
+        return NextResponse.json({ error: "Session binding verification failed: Valid device key signature required" }, { status: 401 });
+      }
+    } else if (signature !== "no-key-in-memory" && !valid) {
       return NextResponse.json({ error: "Session binding verification failed" }, { status: 401 });
     }
-
 
     // ── Issue access token (15 min) ───────────────────────────────────
     const sessionId = crypto.randomUUID();
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      path: "/api/auth/refresh",
+      path: "/api/auth",
       expires: expiresAt,
     });
 

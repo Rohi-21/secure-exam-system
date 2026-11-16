@@ -51,6 +51,9 @@ export async function POST(
     // ── Validate exam state ───────────────────────────────────────────
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (role === "examiner" && exam.createdById !== actorId) {
+      return NextResponse.json({ error: "Forbidden: You do not have permission to evaluate this examination" }, { status: 403 });
+    }
     if (exam.status === "draft" || exam.status === "active") {
       return NextResponse.json(
         { error: "Exam must be closed before evaluation. Update status to 'closed' first." },

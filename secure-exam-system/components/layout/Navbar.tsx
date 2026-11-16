@@ -12,6 +12,23 @@ interface NavbarUser {
   usn?: string;
 }
 
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -20,27 +37,47 @@ export function Navbar() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    // Read from window access token if present
-    const win = window as typeof window & { __accessToken?: string };
-    if (win.__accessToken) {
-      try {
-        const payload = JSON.parse(atob(win.__accessToken.split(".")[1]));
-        setUser({
-          name: payload.name,
-          role: payload.role,
-          usn: payload.usn,
-        });
-      } catch {}
-    } else {
-      // Check current path heuristic or light role hint
-      if (pathname.startsWith("/admin") || pathname.startsWith("/users")) {
-        setUser((prev) => prev || { role: "admin", name: "Administrator" });
-      } else if (pathname.startsWith("/exams")) {
-        setUser((prev) => prev || { role: "examiner", name: "Examiner" });
-      } else if (pathname.startsWith("/dashboard") || pathname.startsWith("/results") || pathname.startsWith("/exam/")) {
-        setUser((prev) => prev || { role: "student", name: "Student" });
+    async function restoreSession() {
+      const win = window as typeof window & { __accessToken?: string };
+      if (win.__accessToken) {
+        const payload = parseJwtPayload(win.__accessToken);
+        if (payload) {
+          setUser({
+            name: (payload.name as string) || (payload.usn as string) || "User",
+            role: payload.role as NavbarUser["role"],
+            usn: payload.usn as string,
+          });
+          return;
+        }
       }
+
+      // If no token in memory, attempt silent session refresh via httpOnly refresh cookie
+      try {
+        const res = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.accessToken) {
+            win.__accessToken = data.accessToken;
+            const payload = parseJwtPayload(data.accessToken);
+            if (payload) {
+              setUser({
+                name: (payload.name as string) || (payload.usn as string) || "User",
+                role: payload.role as NavbarUser["role"],
+                usn: payload.usn as string,
+              });
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      setUser(null);
     }
+
+    restoreSession();
   }, [pathname]);
 
   async function handleLogout() {
@@ -56,7 +93,7 @@ export function Navbar() {
 
   // Define navigation items based on role or context
   const getNavLinks = () => {
-    if (user?.role === "admin" || pathname.startsWith("/admin") || pathname.startsWith("/users")) {
+    if (user?.role === "admin" || user?.role === "hod") {
       return [
         { label: "Overview", href: "/admin" },
         { label: "User Management", href: "/users" },
@@ -64,7 +101,7 @@ export function Navbar() {
         { label: "Benchmarks", href: "/benchmarks" },
       ];
     }
-    if (user?.role === "examiner" || pathname.startsWith("/exams")) {
+    if (user?.role === "examiner") {
       return [
         { label: "All Exams", href: "/exams" },
         { label: "New Exam", href: "/exams/new" },
@@ -72,7 +109,7 @@ export function Navbar() {
         { label: "Benchmarks", href: "/benchmarks" },
       ];
     }
-    if (user?.role === "student" || pathname.startsWith("/dashboard") || pathname.startsWith("/results") || pathname.startsWith("/exam")) {
+    if (user?.role === "student") {
       return [
         { label: "Portal Hub", href: "/dashboard" },
         { label: "Results & Proofs", href: "/results" },
@@ -88,7 +125,7 @@ export function Navbar() {
   };
 
   const navLinks = getNavLinks();
-  const isAuthenticated = Boolean(user || pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/exams") || pathname.startsWith("/users") || pathname.startsWith("/results"));
+  const isAuthenticated = Boolean(user);
 
   const getRoleBadgeVariant = (role?: string) => {
     switch (role) {
@@ -133,7 +170,9 @@ export function Navbar() {
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1" aria-label="Main Navigation">
             {navLinks.map((link) => {
-              const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+              const isActive = link.href === "/exams"
+                ? (pathname === "/exams" || (pathname.startsWith("/exams/") && pathname !== "/exams/new"))
+                : (pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href + "/")));
               return (
                 <Link
                   key={link.href}

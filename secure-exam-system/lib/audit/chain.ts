@@ -173,6 +173,9 @@ export const AuditEventType = {
   CHAIN_HEAD_ANCHORED: "CHAIN_HEAD_ANCHORED",
 } as const;
 
+// In-process serialized append queue to guarantee race-free sequential hash chain linking
+let appendChainQueue: Promise<void> = Promise.resolve();
+
 /**
  * Server-side trusted helper to append an audit entry with concurrency-safe sequence numbering.
  */
@@ -184,44 +187,52 @@ export async function appendAuditLog(
   auditPrivKeyPem: string,
   ipAddress?: string
 ): Promise<AuditEntry> {
-  const { prisma } = await import("@/lib/db");
+  return new Promise<AuditEntry>((resolve, reject) => {
+    appendChainQueue = appendChainQueue
+      .then(async () => {
+        const { prisma } = await import("@/lib/db");
 
-  // Fetch the latest entry to compute next sequence and prevHash
-  const lastEntry = await prisma.auditLog.findFirst({
-    orderBy: { sequenceNo: "desc" },
-    select: { sequenceNo: true, entryHash: true },
+        // Fetch the latest entry to compute next sequence and prevHash
+        const lastEntry = await prisma.auditLog.findFirst({
+          orderBy: { sequenceNo: "desc" },
+          select: { sequenceNo: true, entryHash: true },
+        });
+
+        const prevHash = lastEntry?.entryHash ?? GENESIS_HASH;
+        const sequenceNo = (lastEntry?.sequenceNo ?? 0) + 1;
+
+        const entry = buildAuditEntry(
+          prevHash,
+          sequenceNo,
+          {
+            eventType,
+            actorId,
+            examId,
+            ipAddress,
+            eventData,
+          },
+          auditPrivKeyPem
+        );
+
+        await prisma.auditLog.create({
+          data: {
+            sequenceNo: entry.sequenceNo,
+            eventType: entry.eventType,
+            actorId: entry.actorId ?? null,
+            examId: entry.examId ?? null,
+            ipAddress: entry.ipAddress ?? null,
+            eventData: JSON.stringify(entry.eventData),
+            timestamp: new Date(entry.timestamp),
+            prevHash: entry.prevHash,
+            entryHash: entry.entryHash,
+            auditSig: entry.auditSig,
+          },
+        });
+
+        resolve(entry);
+      })
+      .catch((err) => {
+        reject(err);
+      });
   });
-
-  const prevHash = lastEntry?.entryHash ?? GENESIS_HASH;
-  const sequenceNo = (lastEntry?.sequenceNo ?? 0) + 1;
-
-  const entry = buildAuditEntry(
-    prevHash,
-    sequenceNo,
-    {
-      eventType,
-      actorId,
-      examId,
-      ipAddress,
-      eventData,
-    },
-    auditPrivKeyPem
-  );
-
-  await prisma.auditLog.create({
-    data: {
-      sequenceNo: entry.sequenceNo,
-      eventType: entry.eventType,
-      actorId: entry.actorId ?? null,
-      examId: entry.examId ?? null,
-      ipAddress: entry.ipAddress ?? null,
-      eventData: JSON.stringify(entry.eventData),
-      timestamp: new Date(entry.timestamp),
-      prevHash: entry.prevHash,
-      entryHash: entry.entryHash,
-      auditSig: entry.auditSig,
-    },
-  });
-
-  return entry;
 }

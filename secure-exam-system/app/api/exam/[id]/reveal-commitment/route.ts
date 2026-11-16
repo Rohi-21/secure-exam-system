@@ -25,8 +25,16 @@ export async function POST(
     const role = req.headers.get("x-user-role");
     const { id: examId } = await params;
 
+    const actorId = req.headers.get("x-user-id");
+
     if (!["examiner", "admin", "hod"].includes(role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+    if (role === "examiner" && exam.createdById !== actorId) {
+      return NextResponse.json({ error: "Forbidden: You do not have permission to reveal commitment for this exam" }, { status: 403 });
     }
 
     const { answers, salt } = await req.json();

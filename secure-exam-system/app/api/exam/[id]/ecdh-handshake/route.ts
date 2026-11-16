@@ -125,6 +125,14 @@ export async function POST(
     );
 
     // ── Create / update ExamSession in DB ─────────────────────────────
+    const existingSession = await prisma.examSession.findUnique({
+      where: { studentId_examId: { studentId: studentId!, examId } },
+    });
+
+    if (existingSession?.status === "submitted") {
+      return NextResponse.json({ error: "Exam has already been submitted for this session" }, { status: 400 });
+    }
+
     await prisma.examSession.upsert({
       where: { studentId_examId: { studentId: studentId!, examId } },
       create: {
@@ -132,11 +140,11 @@ export async function POST(
         examId,
         handshakeNonce: nonce,
         status: "active",
+        startedAt: new Date(),
       },
       update: {
         handshakeNonce: nonce,
-        status: "active",
-        startedAt: new Date(),
+        // Preserve original startedAt timestamp so reconnects cannot prolong exam duration
       },
     });
 

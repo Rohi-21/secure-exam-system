@@ -40,9 +40,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Duplicate check ────────────────────────────────────────────────
+    const cleanUsn = usn.trim().toUpperCase();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    // ── Duplicate check (case-insensitive) ─────────────────────────────
     const existing = await prisma.user.findFirst({
-      where: { OR: [{ usn }, { email }] },
+      where: {
+        OR: [
+          { usn: cleanUsn },
+          { email: cleanEmail },
+        ],
+      },
     });
     if (existing) {
       return NextResponse.json({ error: "USN or email already registered" }, { status: 409 });
@@ -53,15 +62,15 @@ export async function POST(req: NextRequest) {
 
     // ── TOTP secret generation + server-side encryption ────────────────
     const { secretBase32 } = generateTOTPSecret();
-    const totpStorageJson = encryptTOTPSecret(secretBase32, usn);
+    const totpStorageJson = encryptTOTPSecret(secretBase32, cleanUsn);
 
 
     // ── Create user record ──────────────────────────────────────────────
     const user = await prisma.user.create({
       data: {
-        usn,
-        email,
-        name,
+        usn: cleanUsn,
+        email: cleanEmail,
+        name: cleanName,
         role,
         passwordHash,
         totpSecret: totpStorageJson,

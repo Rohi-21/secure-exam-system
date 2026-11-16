@@ -126,7 +126,7 @@ This is an automated notification from the KLE Secure Exam System.
 
   await transporter.sendMail({
     from: SMTP_FROM ?? SMTP_USER,
-    to: recipientEmails.join(", "),
+    bcc: recipientEmails,
     subject,
     text,
   });

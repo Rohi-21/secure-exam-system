@@ -89,6 +89,15 @@ export async function reconstructKEK(
     throw new Error("At least 2 shares required to reconstruct ExamKEK");
   }
 
+  // Enforce distinct share indices to prevent Lagrange interpolation division by zero
+  const seenIndices = new Set<number>();
+  for (const s of shares) {
+    if (seenIndices.has(s.shareIndex)) {
+      throw new Error(`Duplicate Shamir share index ${s.shareIndex} detected. Distinct trustee shares required.`);
+    }
+    seenIndices.add(s.shareIndex);
+  }
+
   const rawShares: Buffer[] = [];
 
   for (let i = 0; i < shares.length; i++) {

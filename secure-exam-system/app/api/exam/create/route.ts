@@ -43,17 +43,17 @@ export async function POST(req: NextRequest) {
       trusteePasswords = ["TrusteePass#1Key2026", "TrusteePass#2Key2026", "TrusteePass#3Key2026"];
     }
 
-    // Default trustee IDs if omitted
-    if (!Array.isArray(trusteeIds) || trusteeIds.length !== 3) {
-      const defaultTrustees = await prisma.user.findMany({
-        where: { role: { in: ["examiner", "admin", "hod"] } },
+    // Default trustee IDs if omitted or invalid
+    if (!Array.isArray(trusteeIds) || trusteeIds.length !== 3 || new Set(trusteeIds).size !== 3) {
+      const distinctTrustees = await prisma.user.findMany({
+        where: { role: { in: ["examiner", "admin", "hod", "student"] } },
         take: 3,
         select: { id: true },
       });
-      if (defaultTrustees.length === 3) {
-        trusteeIds = defaultTrustees.map((t) => t.id);
+      if (distinctTrustees.length === 3) {
+        trusteeIds = distinctTrustees.map((t) => t.id);
       } else {
-        trusteeIds = [examinerId, examinerId, examinerId];
+        return NextResponse.json({ error: "System requires at least 3 distinct registered accounts to establish Shamir threshold shares" }, { status: 400 });
       }
     }
 

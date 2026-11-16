@@ -5,7 +5,7 @@
  * Handles: Shamir reconstruction → answer reveal → Merkle finalize → evaluate → release results
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
@@ -49,6 +49,65 @@ export default function ExaminerExamPage() {
   const [revealSalt, setRevealSalt] = useState("");
   const [commitment, setCommitment] = useState("");
   const [evaluationSummary, setEvaluationSummary] = useState<{ studentId: string; score: number }[]>([]);
+
+  useEffect(() => {
+    async function loadExamState() {
+      try {
+        const res = await fetch(`/api/exam/${examId}`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const exam = data.exam;
+        if (!exam) return;
+
+        if (exam.trustees && exam.trustees.length >= 2) {
+          setTrustee1((prev) => ({ ...prev, id: prev.id || exam.trustees[0].trusteeId }));
+          setTrustee2((prev) => ({ ...prev, id: prev.id || exam.trustees[1].trusteeId }));
+        }
+
+        if (exam.isReleased) {
+          setCurrentStep("done");
+          setStepStates({
+            reconstruct: { status: "done", message: "ExamKEK previously reconstructed" },
+            reveal: { status: "done", message: "Answer commitment verified" },
+            finalize: { status: "done", message: `Merkle root: ${exam.merkleRoot?.slice(0, 16) ?? "finalized"}…` },
+            evaluate: { status: "done", message: `Graded ${exam.resultCount} candidate(s)` },
+            release: { status: "done", message: `Published to ${exam.releasedResultCount} candidates` },
+            done: { status: "done", message: "Exam lifecycle complete" },
+          });
+        } else if (exam.resultCount > 0) {
+          setCurrentStep("release");
+          setStepStates((prev) => ({
+            ...prev,
+            reconstruct: { status: "done", message: "ExamKEK reconstructed" },
+            reveal: { status: "done", message: "Answer commitment verified" },
+            finalize: { status: "done", message: "Merkle root finalized" },
+            evaluate: { status: "done", message: `Graded ${exam.resultCount} candidate(s)` },
+          }));
+        } else if (exam.isFinalized) {
+          setCurrentStep("evaluate");
+          setStepStates((prev) => ({
+            ...prev,
+            reconstruct: { status: "done", message: "ExamKEK reconstructed" },
+            reveal: { status: "done", message: "Answer commitment verified" },
+            finalize: { status: "done", message: `Merkle root: ${exam.merkleRoot?.slice(0, 16) ?? "finalized"}…` },
+          }));
+        } else if (exam.isAnswerRevealed) {
+          setCurrentStep("finalize");
+          setStepStates((prev) => ({
+            ...prev,
+            reconstruct: { status: "done", message: "ExamKEK reconstructed" },
+            reveal: { status: "done", message: "Answer commitment verified" },
+          }));
+        }
+      } catch (err) {
+        console.warn("[examiner] Could not load initial exam state", err);
+      }
+    }
+    loadExamState();
+  }, [examId]);
 
   function setStep(step: Step, status: StepStatus, message: string) {
     setStepStates((prev) => ({ ...prev, [step]: { status, message } }));
